@@ -32,15 +32,18 @@ src/
       profile.tsx         # Profile / My Listings (/profile)
     listing/
       [id].tsx            # Listing detail (/listing/:id)
-  components/             # Shared UI (Screen, EmptyState)
+  components/             # Shared UI (Screen, EmptyState, ListingCard)
+  database/
+    listings.json         # Mock listings (edit this to add/change items)
+    index.ts              # Listing type + getListings() / getListing(id)
   constants/theme.ts      # Colors, spacing, radius, type sizes
 ```
 
 ## Status
 
-This is the framework only. Every screen is an empty placeholder. Not built yet:
+Browse shows the mock listings from `src/database/listings.json`. The other screens are still placeholders. Not built yet:
 
-- Mock listings
+- Listing photos (cards show a category icon instead)
 - Listing detail page design
 - Post page design
 - Messaging

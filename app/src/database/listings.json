@@ -1,0 +1,134 @@
+[
+  {
+    "id": "1",
+    "title": "Calculus: Early Transcendentals (9th ed.)",
+    "price": 45,
+    "category": "Textbooks",
+    "condition": "Good",
+    "description": "Some highlighting in chapters 1-4. No missing pages.",
+    "seller": "Anonymous Owl",
+    "postedAt": "2026-10-27T15:20:00Z",
+    "images": []
+  },
+  {
+    "id": "2",
+    "title": "IKEA desk lamp",
+    "price": 10,
+    "category": "Dorm",
+    "condition": "Like new",
+    "description": "White adjustable arm lamp. Bulb included.",
+    "seller": "Anonymous Fox",
+    "postedAt": "2026-10-27T12:05:00Z",
+    "images": []
+  },
+  {
+    "id": "3",
+    "title": "Mini fridge (3.1 cu ft)",
+    "price": 80,
+    "category": "Dorm",
+    "condition": "Good",
+    "description": "Works great, has a small freezer section. Pickup only.",
+    "seller": "Anonymous Bear",
+    "postedAt": "2026-10-26T19:40:00Z",
+    "images": []
+  },
+  {
+    "id": "4",
+    "title": "Trek FX 2 hybrid bike",
+    "price": 250,
+    "category": "Bikes",
+    "condition": "Good",
+    "description": "Medium frame. New tires this semester. Lock included.",
+    "seller": "Anonymous Hawk",
+    "postedAt": "2026-10-26T14:10:00Z",
+    "images": []
+  },
+  {
+    "id": "5",
+    "title": "TI-84 Plus CE graphing calculator",
+    "price": 60,
+    "category": "Electronics",
+    "condition": "Like new",
+    "description": "Comes with charging cable. Used for one semester.",
+    "seller": "Anonymous Otter",
+    "postedAt": "2026-10-25T21:30:00Z",
+    "images": []
+  },
+  {
+    "id": "6",
+    "title": "North Face puffer jacket (M)",
+    "price": 70,
+    "category": "Clothing",
+    "condition": "Good",
+    "description": "Black, size medium. Warm, no tears.",
+    "seller": "Anonymous Deer",
+    "postedAt": "2026-10-25T16:00:00Z",
+    "images": []
+  },
+  {
+    "id": "7",
+    "title": "Homecoming game ticket",
+    "price": 25,
+    "category": "Tickets",
+    "condition": "New",
+    "description": "Student section, one ticket. Can transfer in the app.",
+    "seller": "Anonymous Wolf",
+    "postedAt": "2026-10-25T10:45:00Z",
+    "images": []
+  },
+  {
+    "id": "8",
+    "title": "Futon couch",
+    "price": 120,
+    "category": "Furniture",
+    "condition": "Fair",
+    "description": "Gray futon, folds flat into a bed. Some wear on the arms.",
+    "seller": "Anonymous Moose",
+    "postedAt": "2026-10-24T18:25:00Z",
+    "images": []
+  },
+  {
+    "id": "9",
+    "title": "Intro to Psychology textbook",
+    "price": 30,
+    "category": "Textbooks",
+    "condition": "Fair",
+    "description": "Older edition but matches the syllabus for PSYC 101.",
+    "seller": "Anonymous Robin",
+    "postedAt": "2026-10-24T09:15:00Z",
+    "images": []
+  },
+  {
+    "id": "10",
+    "title": "Sony WH-1000XM4 headphones",
+    "price": 150,
+    "category": "Electronics",
+    "condition": "Good",
+    "description": "Noise cancelling works perfectly. Case and cable included.",
+    "seller": "Anonymous Lynx",
+    "postedAt": "2026-10-23T20:50:00Z",
+    "images": []
+  },
+  {
+    "id": "11",
+    "title": "Desk chair",
+    "price": 35,
+    "category": "Furniture",
+    "condition": "Good",
+    "description": "Adjustable height, mesh back. Pickup from north campus.",
+    "seller": "Anonymous Crow",
+    "postedAt": "2026-10-23T13:35:00Z",
+    "images": []
+  },
+  {
+    "id": "12",
+    "title": "Vintage crewneck sweatshirt (L)",
+    "price": 20,
+    "category": "Clothing",
+    "condition": "Good",
+    "description": "University logo, size large. Washed and ready.",
+    "seller": "Anonymous Seal",
+    "postedAt": "2026-10-22T17:05:00Z",
+    "images": []
+  }
+]
