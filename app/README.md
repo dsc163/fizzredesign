@@ -2,6 +2,10 @@
 
 A campus marketplace app built with Expo (React Native) and Expo Router. A single codebase runs on iOS, Android, and the web. The mobile layout is the main target. On web, the app currently renders as a phone-width column.
 
+## Live site
+
+https://dsc163.github.io/fizzredesign/ is rebuilt automatically on every push by `.github/workflows/deploy-web.yml`. GitHub Pages must be enabled once: repo Settings → Pages → Source: **GitHub Actions**.
+
 ## Run it
 
 ```bash
@@ -11,7 +15,7 @@ npm start          # then press i (iOS), a (Android), or w (web)
 ```
 
 - **Phone:** scan the QR code with the Expo Go app.
-- **Web only:** `npm run web`
+- **Web only:** `npm run web`, then open the `/fizzredesign/` path it prints. The app is served under that path to match GitHub Pages.
 - **Typecheck:** `npm run typecheck`
 
 ## Structure

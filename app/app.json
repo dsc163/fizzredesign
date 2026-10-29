@@ -25,6 +25,9 @@
     "scheme": "fizzmarketplace",
     "plugins": [
       "expo-router"
-    ]
+    ],
+    "experiments": {
+      "baseUrl": "/fizzredesign"
+    }
   }
 }
