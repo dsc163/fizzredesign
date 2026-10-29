@@ -24,7 +24,13 @@
     },
     "scheme": "fizzmarketplace",
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Fizz Marketplace uses your photos so you can add pictures to your listings."
+        }
+      ]
     ],
     "experiments": {
       "baseUrl": "/fizzredesign"

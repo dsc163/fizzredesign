@@ -4,10 +4,10 @@ import { EmptyState } from '@/components/EmptyState';
 import { ListingCard } from '@/components/ListingCard';
 import { Screen } from '@/components/Screen';
 import { Spacing } from '@/constants/theme';
-import { getListings } from '@/database';
+import { useListings } from '@/database';
 
 export default function BrowseScreen() {
-  const listings = getListings();
+  const listings = useListings();
 
   return (
     <Screen>

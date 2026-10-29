@@ -27,7 +27,7 @@ src/
     (tabs)/
       _layout.tsx         # Bottom tab bar
       index.tsx           # Browse   (/)
-      post.tsx            # Post     (/post)
+      post.tsx            # Post form (/post): photo, title, price, description
       messages.tsx        # Messages (/messages)
       profile.tsx         # Profile / My Listings (/profile)
     listing/
@@ -35,17 +35,16 @@ src/
   components/             # Shared UI (Screen, EmptyState, ListingCard)
   database/
     listings.json         # Mock listings (edit this to add/change items)
-    index.ts              # Listing type + getListings() / getListing(id)
+    index.ts              # Listing type, useListings(), getListing(id), addListing()
   constants/theme.ts      # Colors, spacing, radius, type sizes
 ```
 
 ## Status
 
-Browse shows the mock listings from `src/database/listings.json`. The other screens are still placeholders. Not built yet:
+Browse shows the mock listings from `src/database/listings.json` plus anything posted from the Post tab. Posted listings are kept in memory only and disappear when the app reloads. Messages, Profile, and the listing detail page are still placeholders. Not built yet:
 
-- Listing photos (cards show a category icon instead)
+- Saving posted listings permanently
 - Listing detail page design
-- Post page design
 - Messaging
 - Desktop web layout
 - Backend
