@@ -48,7 +48,7 @@ export default function TabLayout() {
         name="post"
         options={{
           title: 'Post',
-          headerTitle: 'New Listing',
+          headerTitle: 'New Post',
           tabBarIcon: tabIcon('add-circle', 'add-circle-outline'),
         }}
       />
@@ -63,7 +63,7 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: 'Profile',
-          headerTitle: 'My Listings',
+          headerTitle: 'Profile',
           tabBarIcon: tabIcon('person-circle', 'person-circle-outline'),
         }}
       />

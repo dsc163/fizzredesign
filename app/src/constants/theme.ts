@@ -10,6 +10,12 @@ export const Colors = {
   textMuted: '#A1A1AA',
   primary: '#1D4ED8',
   primarySoft: '#EFF4FF',
+  success: '#15803D',
+  successSoft: '#ECFDF3',
+  warning: '#B45309',
+  warningSoft: '#FFF7E6',
+  danger: '#B91C1C',
+  dangerSoft: '#FEF2F2',
   // Backdrop behind the centered phone-width column on web.
   webBackdrop: '#F4F4F5',
 } as const;
@@ -39,3 +45,13 @@ export const Typography = {
 
 // Mobile-first: on web the app renders in a column no wider than this.
 export const MaxAppWidth = 480;
+
+// Label colors for each post type, matching the PRD mockups.
+export const TypeColors: Record<string, { fg: string; bg: string }> = {
+  item: { fg: '#1D4ED8', bg: '#EFF4FF' },
+  service: { fg: '#15803D', bg: '#ECFDF3' },
+  event: { fg: '#6D28D9', bg: '#F3EEFF' },
+  wanted: { fg: '#B45309', bg: '#FFF7E6' },
+  lost: { fg: '#B91C1C', bg: '#FEF2F2' },
+  found: { fg: '#0F766E', bg: '#ECFDF9' },
+};
