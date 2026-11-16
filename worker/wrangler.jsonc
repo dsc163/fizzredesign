@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "fizz-marketplace",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "routes": [
+    { "pattern": "darioushclapp.com/fizzredesign*", "zone_name": "darioushclapp.com" },
+    { "pattern": "www.darioushclapp.com/fizzredesign*", "zone_name": "darioushclapp.com" }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "fizz-marketplace",
+      "database_id": "4b3f1ed7-69a3-4ab5-a562-88befeccf279",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vars": { "SITE_ORIGIN": "https://dsc163.github.io" },
+  "observability": { "enabled": true }
+}
