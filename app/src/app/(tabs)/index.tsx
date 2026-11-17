@@ -1,5 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useFocusEffect } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -41,6 +42,36 @@ function eventRows(listings: Listing[]): Row[] {
   }
   return Object.entries(groups).flatMap(([title, items]) =>
     items.length ? [{ kind: 'header' as const, title }, ...items.map((listing) => ({ kind: 'post' as const, listing }))] : []
+  );
+}
+
+const TIP_KEY = 'fizz.browseTipDismissed';
+
+// A one-time pointer to the main task for first-time visitors.
+function StartTip() {
+  const router = useRouter();
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    AsyncStorage.getItem(TIP_KEY)
+      .then((v) => setShow(v !== '1'))
+      .catch(() => setShow(true));
+  }, []);
+  if (!show) return null;
+  const dismiss = () => {
+    setShow(false);
+    AsyncStorage.setItem(TIP_KEY, '1').catch(() => undefined);
+  };
+  return (
+    <View style={styles.tip}>
+      <View style={styles.tipText}>
+        <Text style={styles.tipTitle}>New here? Try booking a service</Text>
+        <Text style={styles.tipBody}>Open a service like a haircut or tutoring, pick a time, and tap Book. The seller replies in Messages.</Text>
+        <Text style={styles.tipLink} onPress={() => { dismiss(); router.push('/listing/l_gavin_cuts'); }}>
+          Show me Fresh Cuts by Gavin →
+        </Text>
+      </View>
+      <Ionicons name="close" size={18} color={Colors.textSecondary} onPress={dismiss} accessibilityLabel="Dismiss tip" />
+    </View>
   );
 }
 
@@ -151,7 +182,12 @@ export default function BrowseScreen() {
           }
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
-          ListHeaderComponent={<ErrorText message={error} />}
+          ListHeaderComponent={
+            <>
+              {section === 'all' && !query && <StartTip />}
+              <ErrorText message={error} />
+            </>
+          }
           ListEmptyComponent={
             error ? undefined : (
               <EmptyState
@@ -187,5 +223,17 @@ const styles = StyleSheet.create({
   searchInput: { ...Typography.body, flex: 1, color: Colors.text, paddingVertical: Spacing.md },
   chips: { gap: Spacing.sm, paddingHorizontal: Spacing.lg },
   list: { padding: Spacing.lg, gap: Spacing.md, flexGrow: 1 },
+  tip: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    padding: Spacing.md,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.primarySoft,
+    marginBottom: Spacing.xs,
+  },
+  tipText: { flex: 1, gap: 4 },
+  tipTitle: { ...Typography.heading, fontSize: 15, color: Colors.text },
+  tipBody: { ...Typography.caption, color: Colors.textSecondary },
+  tipLink: { ...Typography.caption, fontWeight: '700', color: Colors.primary },
   groupHeader: { ...Typography.heading, color: Colors.text, marginTop: Spacing.xs },
 });

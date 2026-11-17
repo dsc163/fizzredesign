@@ -1,8 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { BottomTabNavigationOptions, Tabs } from 'expo-router/js-tabs';
-import { ComponentProps } from 'react';
+import { ComponentProps, useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 
+import { api } from '@/api/client';
 import { Colors, Typography } from '@/constants/theme';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -20,7 +21,28 @@ function tabIcon(
   );
 }
 
+// Total unread messages, refreshed every 10 seconds for the tab badge.
+function useUnreadCount() {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    let active = true;
+    const load = () =>
+      api
+        .threads()
+        .then((r) => active && setCount(r.threads.reduce((n, t) => n + t.unread, 0)))
+        .catch(() => undefined);
+    load();
+    const timer = setInterval(load, 10000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, []);
+  return count;
+}
+
 export default function TabLayout() {
+  const unread = useUnreadCount();
   return (
     <Tabs
       screenOptions={{
@@ -56,6 +78,7 @@ export default function TabLayout() {
         name="messages"
         options={{
           title: 'Messages',
+          tabBarBadge: unread > 0 ? unread : undefined,
           tabBarIcon: tabIcon('chatbubbles', 'chatbubbles-outline'),
         }}
       />
