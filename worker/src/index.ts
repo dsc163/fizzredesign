@@ -925,6 +925,9 @@ export default {
       response = await fetch(`${env.SITE_ORIGIN}${BASE}/`, { cf: { cacheTtl: 60, cacheEverything: true } });
       response = new Response(response.body, { status: 200, headers: response.headers });
     }
-    return response;
+    // Hashed bundles never change; pages must be re-checked so new deploys show up right away.
+    const headers = new Headers(response.headers);
+    headers.set('Cache-Control', url.pathname.includes('/_expo/static/') ? 'public, max-age=31536000, immutable' : 'no-cache');
+    return new Response(response.body, { status: response.status, headers });
   },
 } satisfies ExportedHandler<Env>;
