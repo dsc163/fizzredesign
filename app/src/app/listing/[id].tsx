@@ -12,6 +12,7 @@ import { TimePicker } from '@/components/TimePicker';
 import { Avatar, Button, Card, Chip, ErrorText, Label, Loading, PostThumb, TypeLabel, VerifiedBadge } from '@/components/ui';
 import { Colors, Party, Radius, Spacing, Typography } from '@/constants/theme';
 import { formatDateTime, formatPrice } from '@/lib/format';
+import { useRequireSignIn } from '@/lib/requireSignIn';
 
 const QUICK_MESSAGES = ['Is this still available?', 'Are you free this week?'];
 
@@ -189,6 +190,7 @@ function AuthorBlock({ listing }: { listing: Listing }) {
 
 function RequestPanel({ listing, existingThreadId }: { listing: Listing; existingThreadId: string | null }) {
   const router = useRouter();
+  const requireSignIn = useRequireSignIn();
   const isService = listing.type === 'service';
   const [option, setOption] = useState(listing.priceOptions[0]?.label ?? null);
   const [chosenTime, setChosenTime] = useState<number | null>(null);
@@ -216,7 +218,6 @@ function RequestPanel({ listing, existingThreadId }: { listing: Listing; existin
   }
 
   async function submit() {
-    if (!chosenTime) return;
     setError(null);
     setBusy(true);
     try {
@@ -250,13 +251,16 @@ function RequestPanel({ listing, existingThreadId }: { listing: Listing; existin
         </View>
       )}
 
-      <TimePicker dayLabel={isService ? 'PICK A DAY' : 'WHEN CAN YOU MEET?'} onChange={setChosenTime} />
+      <TimePicker
+        dayLabel={isService ? 'PICK A DAY (OPTIONAL)' : 'WHEN CAN YOU MEET? (OPTIONAL)'}
+        onChange={setChosenTime}
+      />
 
       <View style={styles.section}>
         <Label>QUICK MESSAGE</Label>
         <View style={styles.wrap}>
           {QUICK_MESSAGES.map((m) => (
-            <Chip key={m} label={m} icon="chatbubble-outline" onPress={() => sendQuick(m)} />
+            <Chip key={m} label={m} icon="chatbubble-outline" onPress={() => requireSignIn(() => sendQuick(m))} />
           ))}
         </View>
       </View>
@@ -264,12 +268,11 @@ function RequestPanel({ listing, existingThreadId }: { listing: Listing; existin
       <ErrorText message={error} />
       <Button
         title={`${isService ? 'Book' : 'Send request'} · ${formatPrice(price)}`}
-        onPress={submit}
+        onPress={() => requireSignIn(submit)}
         loading={busy}
-        disabled={!chosenTime}
       />
       <Text style={styles.finePrint}>
-        {chosenTime ? `${formatDateTime(chosenTime)}. ` : 'Pick a time to continue. '}
+        {chosenTime ? `${formatDateTime(chosenTime)}. ` : 'No time picked: you can arrange one in chat. '}
         Names are shared with both of you once {isService ? listing.author.name.split(' ')[0] : 'the seller'} accepts. You
         pay in person.
       </Text>

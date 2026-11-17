@@ -27,6 +27,9 @@ export function resolveUrl(path: string | null | undefined) {
 
 export type Prefs = { remindDay: boolean; remindHour: boolean };
 
+export type PaymentKey = 'venmo' | 'cashapp' | 'zelle' | 'paypal' | 'applepay';
+export type Payments = Partial<Record<PaymentKey, string>>;
+
 export type User = {
   id: string;
   email: string;
@@ -34,7 +37,7 @@ export type User = {
   college: string | null;
   bio: string | null;
   photo: string | null;
-  venmo: string | null;
+  payments: Payments;
   interests: string[] | null;
   prefs: Prefs;
 };
@@ -115,7 +118,7 @@ export type Counterpart = {
   college: string | null;
   bio: string | null;
   photo: string | null;
-  venmo: string | null;
+  payments: Payments;
 };
 
 export type Message = { id: string; body: string; system: boolean; mine: boolean; createdAt: number };
@@ -248,7 +251,7 @@ export const api = {
   startThread: (listingId: string) => request<{ thread: { id: string } }>('POST', '/threads', { listingId }),
   thread: (id: string) => request<{ thread: Thread }>('GET', `/threads/${id}`),
   sendMessage: (id: string, body: string) => request<{ thread: Thread }>('POST', `/threads/${id}/messages`, { body }),
-  requestThread: (id: string, input: { proposedTime: number; optionLabel?: string | null; note?: string }) =>
+  requestThread: (id: string, input: { proposedTime: number | null; optionLabel?: string | null; note?: string }) =>
     request<{ thread: Thread }>('POST', `/threads/${id}/request`, input),
   respond: (id: string, action: 'accept' | 'decline' | 'suggest', proposedTime?: number) =>
     request<{ thread: Thread }>('POST', `/threads/${id}/respond`, { action, proposedTime }),

@@ -7,6 +7,7 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Listing, resolveUrl } from '@/api/client';
 import { Party, Radius, Spacing, Typography } from '@/constants/theme';
 import { dateTile, formatDay, formatTime } from '@/lib/format';
+import { useRequireSignIn } from '@/lib/requireSignIn';
 import { toggleRsvp } from '@/lib/rsvp';
 
 export function eventLocation(listing: Listing) {
@@ -24,10 +25,12 @@ export function PartyEventCard({ listing, onChange }: { listing: Listing; onChan
   const tile = dateTile(d.starts_at ?? Date.now());
   const going = Boolean(d.my_going);
   const [busy, setBusy] = useState(false);
+  const requireSignIn = useRequireSignIn();
   const photo = resolveUrl(listing.photos[0]);
   const live = d.starts_at && d.ends_at && Date.now() >= d.starts_at && Date.now() < d.ends_at;
 
-  async function rsvp() {
+  const rsvp = () => requireSignIn(doRsvp);
+  async function doRsvp() {
     setBusy(true);
     try {
       const result = await toggleRsvp(listing);

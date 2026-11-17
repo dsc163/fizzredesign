@@ -7,6 +7,7 @@ import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, Vie
 import { api, Listing, ListingResponse, resolveUrl } from '@/api/client';
 import { Party, Radius, Spacing, Typography } from '@/constants/theme';
 import { dateTile, formatDay, formatTime } from '@/lib/format';
+import { useRequireSignIn } from '@/lib/requireSignIn';
 import { toggleRsvp } from '@/lib/rsvp';
 
 import { Comments, SocialBar } from './social';
@@ -28,6 +29,7 @@ function calendarLink(listing: Listing) {
 
 export function EventDetail({ data, onChange }: { data: ListingResponse; onChange: (r: ListingResponse) => void }) {
   const router = useRouter();
+  const requireSignIn = useRequireSignIn();
   const { listing, updates, comments, attendees } = data;
   const d = listing.details;
   const tile = dateTile(d.starts_at ?? Date.now());
@@ -134,7 +136,7 @@ export function EventDetail({ data, onChange }: { data: ListingResponse; onChang
         <View style={styles.actions}>
           <Pressable
             style={styles.flex2}
-            onPress={() => run(() => toggleRsvp(listing))}
+            onPress={() => requireSignIn(() => run(() => toggleRsvp(listing)))}
             disabled={busy}
             accessibilityRole="button"
             accessibilityLabel={going ? 'Cancel RSVP' : 'RSVP'}>

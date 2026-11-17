@@ -1,13 +1,26 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { useAuth } from '@/auth/AuthProvider';
 import { Colors } from '@/constants/theme';
 import { useBadges } from '@/lib/badges';
 
 export function HeaderBell({ color = Colors.text }: { color?: string }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const { user } = useAuth();
   const { notifications } = useBadges();
+  if (!user) {
+    return (
+      <Pressable
+        onPress={() => router.push({ pathname: '/welcome', params: { next: pathname } })}
+        accessibilityRole="button"
+        style={styles.button}>
+        <Text style={[styles.signIn, { color }]}>Sign in</Text>
+      </Pressable>
+    );
+  }
   return (
     <Pressable
       onPress={() => router.push('/notifications')}
@@ -39,4 +52,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   badgeText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
+  signIn: { fontSize: 15, fontWeight: '700' },
 });

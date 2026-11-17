@@ -7,8 +7,10 @@ import { useAuth } from '@/auth/AuthProvider';
 import { PartyEventCard } from '@/components/PartyEventCard';
 import { PostCard } from '@/components/PostCard';
 import { Screen } from '@/components/Screen';
+import { SignInPrompt } from '@/components/SignInPrompt';
 import { Avatar, Button, Card, Label, VerifiedBadge } from '@/components/ui';
 import { Colors, Spacing, Typography } from '@/constants/theme';
+import { paymentEntries } from '@/lib/payments';
 
 export default function ProfileScreen() {
   const { user, signOut } = useAuth();
@@ -25,8 +27,16 @@ export default function ProfileScreen() {
     }, [])
   );
 
-  if (!user) return null;
-  const missing = [!user.photo && 'a photo', !user.bio && 'a bio', !user.venmo && 'your Venmo'].filter(Boolean);
+  if (!user) {
+    return (
+      <SignInPrompt
+        icon="person-circle-outline"
+        title="Your profile"
+        message="Sign in to see your posts, saved items, and the events you're going to."
+      />
+    );
+  }
+  const pay = paymentEntries(user.payments);
 
   return (
     <Screen>
@@ -47,18 +57,18 @@ export default function ProfileScreen() {
         {user.bio ? <Text style={styles.bio}>{user.bio}</Text> : null}
 
         <Card>
-          <Label>PAYMENT</Label>
-          <Text style={styles.body}>
-            {user.venmo ? `Venmo: ${user.venmo}` : 'No Venmo handle yet.'} Only shown to the other person after you accept a
-            request.
-          </Text>
+          <Label>HOW PEOPLE CAN PAY YOU</Label>
+          {pay.length === 0 ? (
+            <Text style={styles.body}>No payment apps added. Add Venmo, Cash App, Zelle, PayPal, or Apple Pay in Edit profile.</Text>
+          ) : (
+            pay.map((p) => (
+              <Text key={p.key} style={styles.body}>
+                {p.label}: <Text style={styles.payHandle}>{p.handle}</Text>
+              </Text>
+            ))
+          )}
+          <Text style={styles.hint}>Only shown to the other person after you accept a request.</Text>
         </Card>
-
-        {missing.length > 0 && (
-          <Text style={styles.hint}>
-            Add {missing.join(', ')} so buyers trust you. A photo and bio are required to post a service.
-          </Text>
-        )}
         <Button variant="secondary" title="Edit profile" icon="create-outline" onPress={() => router.push('/profile/edit')} />
 
         <Text style={styles.section}>Events I'm going to</Text>
@@ -107,7 +117,8 @@ const styles = StyleSheet.create({
   meta: { ...Typography.caption, color: Colors.textSecondary },
   bio: { ...Typography.body, color: Colors.text },
   body: { ...Typography.body, color: Colors.textSecondary },
-  hint: { ...Typography.caption, color: Colors.warning },
+  hint: { ...Typography.caption, color: Colors.textSecondary },
+  payHandle: { color: Colors.text, fontWeight: '600' },
   section: { ...Typography.heading, color: Colors.text, marginTop: Spacing.sm },
   listing: { gap: 4 },
   statusTag: { ...Typography.caption, color: Colors.warning, paddingLeft: Spacing.sm },

@@ -2,12 +2,14 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
-import { api } from '@/api/client';
+import { api, Payments } from '@/api/client';
 import { useAuth } from '@/auth/AuthProvider';
 import { Screen } from '@/components/Screen';
+import { SignInPrompt } from '@/components/SignInPrompt';
 import { Avatar, Button, Chip, ErrorText, Field, Label } from '@/components/ui';
 import { Colors, Spacing, Typography } from '@/constants/theme';
 import { pickAndUploadPhoto } from '@/lib/images';
+import { PAYMENT_METHODS } from '@/lib/payments';
 
 const INTERESTS = ['Parties', 'Sports', 'Clubs', 'Performances', 'Food', 'Study', 'Pop-ups'];
 
@@ -17,7 +19,7 @@ export default function EditProfileScreen() {
   const [name, setName] = useState(user?.name ?? '');
   const [college, setCollege] = useState(user?.college ?? '');
   const [bio, setBio] = useState(user?.bio ?? '');
-  const [venmo, setVenmo] = useState(user?.venmo ?? '');
+  const [payments, setPayments] = useState<Payments>(user?.payments ?? {});
   const [photo, setPhoto] = useState(user?.photo ?? null);
   const [interests, setInterests] = useState<string[]>(user?.interests ?? []);
   const [remindDay, setRemindDay] = useState(user?.prefs.remindDay ?? true);
@@ -43,12 +45,14 @@ export default function EditProfileScreen() {
     setError(null);
     setSaving(true);
     try {
-      const handle = venmo.trim() && !venmo.trim().startsWith('@') ? `@${venmo.trim()}` : venmo.trim();
+      const cleaned = Object.fromEntries(
+        PAYMENT_METHODS.map((m) => [m.key, m.normalize((payments[m.key] ?? '').trim())])
+      ) as Payments;
       const result = await api.updateMe({
         name: name.trim(),
         college: college.trim(),
         bio: bio.trim(),
-        venmo: handle,
+        payments: cleaned,
         photo,
         interests,
         prefs: { remindDay, remindHour },
@@ -62,7 +66,9 @@ export default function EditProfileScreen() {
     }
   }
 
-  if (!user) return null;
+  if (!user) {
+    return <SignInPrompt icon="person-circle-outline" title="Edit your profile" message="Sign in to edit your profile." />;
+  }
 
   return (
     <Screen>
@@ -82,14 +88,21 @@ export default function EditProfileScreen() {
             multiline
             maxLength={300}
           />
-          <Field
-            label="Venmo handle"
-            value={venmo}
-            onChangeText={setVenmo}
-            placeholder="@your-handle"
-            autoCapitalize="none"
-            hint="Only shown to the other person after you accept a request."
-          />
+          <View style={styles.section}>
+            <Label>HOW PEOPLE CAN PAY YOU (ALL OPTIONAL)</Label>
+            <Text style={styles.hint}>Only shown to the other person after you accept a request.</Text>
+            {PAYMENT_METHODS.map((m) => (
+              <Field
+                key={m.key}
+                label={m.label}
+                value={payments[m.key] ?? ''}
+                onChangeText={(v) => setPayments((all) => ({ ...all, [m.key]: v }))}
+                placeholder={m.placeholder}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            ))}
+          </View>
           <View style={styles.section}>
             <Label>EVENT INTERESTS</Label>
             <View style={styles.wrap}>
@@ -128,6 +141,7 @@ const styles = StyleSheet.create({
   photo: { alignItems: 'center', gap: Spacing.sm },
   photoText: { ...Typography.caption, fontWeight: '600', color: Colors.primary },
   section: { gap: Spacing.sm },
+  hint: { ...Typography.caption, color: Colors.textSecondary },
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
   switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   switchText: { ...Typography.body, color: Colors.text },

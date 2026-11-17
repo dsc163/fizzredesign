@@ -3,6 +3,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -14,19 +15,22 @@ import {
 } from 'react-native';
 
 import { api, Thread } from '@/api/client';
+import { useAuth } from '@/auth/AuthProvider';
 import { EmptyState } from '@/components/EmptyState';
 import { Screen } from '@/components/Screen';
+import { SignInPrompt } from '@/components/SignInPrompt';
 import { TimePicker } from '@/components/TimePicker';
 import { Avatar, Button, Card, Chip, ErrorText, Label, Loading, PostThumb, VerifiedBadge } from '@/components/ui';
 import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
 import { formatDateTime, formatPrice, formatTime } from '@/lib/format';
 import { useBadges } from '@/lib/badges';
+import { paymentEntries } from '@/lib/payments';
 import { usePolling } from '@/lib/usePolling';
 
 const MEETUP_SPOTS = ['Fondren Library entrance', 'RMC', 'College commons'];
 const TEMPLATES = ['Is this still available?', 'Are you free this week?', 'On my way!', 'Running 5 minutes late'];
 
-export default function ThreadScreen() {
+function ThreadScreenContent() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const [thread, setThread] = useState<Thread | null>(null);
@@ -106,7 +110,7 @@ export default function ThreadScreen() {
               </Text>
               <Text style={styles.meta}>
                 {thread.role === 'buyer' ? 'You are the buyer' : 'You are the seller'}
-                {thread.optionLabel ? ` · ${thread.optionLabel}` : ''}
+                {thread.optionLabel && thread.optionLabel !== thread.listing.title ? ` · ${thread.optionLabel}` : ''}
                 {thread.price !== null ? ` · ${formatPrice(thread.price)}` : ''}
               </Text>
             </View>
@@ -219,11 +223,13 @@ function StatusPanel({ thread, busy, act }: { thread: Thread; busy: boolean; act
             {thread.optionLabel ?? thread.listing.title}
             {thread.price !== null ? ` · ${formatPrice(thread.price)}` : ''}
           </Text>
-          {thread.proposedTime && (
+          {thread.proposedTime ? (
             <View style={styles.inline}>
               <Ionicons name="time-outline" size={18} color={Colors.textSecondary} />
               <Text style={styles.body}>{formatDateTime(thread.proposedTime)}</Text>
             </View>
+          ) : (
+            <Text style={styles.body}>No time picked yet. Agree on one in the chat below.</Text>
           )}
           {theirTurn ? (
             <Text style={styles.body}>
@@ -303,11 +309,13 @@ function AcceptedPanel({ thread, busy, act }: { thread: Thread; busy: boolean; a
 
       <Card>
         <Label>WHEN AND WHERE</Label>
-        {thread.proposedTime && (
+        {thread.proposedTime ? (
           <View style={styles.inline}>
             <Ionicons name="time-outline" size={18} color={Colors.textSecondary} />
             <Text style={styles.body}>{formatDateTime(thread.proposedTime)}</Text>
           </View>
+        ) : (
+          <Text style={styles.body}>Time: agree on one in the chat.</Text>
         )}
         {thread.meetupSpot && (
           <View style={styles.inline}>
@@ -350,15 +358,27 @@ function AcceptedPanel({ thread, busy, act }: { thread: Thread; busy: boolean; a
       </Card>
 
       <Card>
-        <Label>PAY IN PERSON</Label>
-        {other.venmo ? (
-          <View style={styles.payRow}>
-            <Text style={styles.body}>{isBuyer ? 'Venmo' : "Buyer's Venmo"}</Text>
-            <Text style={styles.cardTitle}>{other.venmo}</Text>
-          </View>
+        <Label>{isBuyer ? 'PAY IN PERSON' : "BUYER'S PAYMENT APPS"}</Label>
+        {paymentEntries(other.payments).length > 0 ? (
+          paymentEntries(other.payments).map((p) => (
+            <Pressable
+              key={p.key}
+              style={styles.payRow}
+              disabled={!p.url}
+              onPress={() => p.url && Linking.openURL(p.url)}
+              accessibilityRole={p.url ? 'link' : 'text'}>
+              <Text style={styles.body}>{p.label}</Text>
+              <View style={styles.inline}>
+                <Text style={styles.cardTitle}>{p.handle}</Text>
+                {p.url && <Ionicons name="open-outline" size={16} color={Colors.primary} />}
+              </View>
+            </Pressable>
+          ))
         ) : (
           <Text style={styles.body}>
-            {isBuyer ? 'The seller has not added a Venmo handle. Pay with cash or ask in the chat.' : 'Collect payment in person.'}
+            {isBuyer
+              ? "The seller hasn't added a payment app. Pay with cash or ask in the chat."
+              : 'Collect payment in person.'}
           </Text>
         )}
       </Card>
@@ -455,3 +475,9 @@ const styles = StyleSheet.create({
   },
   sendDisabled: { backgroundColor: Colors.textMuted },
 });
+
+export default function ThreadScreen() {
+  const { user } = useAuth();
+  if (!user) return <SignInPrompt icon="chatbubbles-outline" title="Conversation" message="Sign in to see this conversation." />;
+  return <ThreadScreenContent />;
+}

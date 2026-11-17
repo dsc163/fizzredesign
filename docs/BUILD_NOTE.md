@@ -9,10 +9,10 @@
 
 **Book a service from another Rice student and complete the exchange.** This is the PRD's north-star action, a completed peer-to-peer exchange.
 
-1. A provider posts a service, for example "Box braids, $60". They need a profile photo and a bio first.
-2. A buyer finds it on **Browse**, picks an option, a day, and a time, and taps **Book**.
+1. A provider posts a service with just a name and a cost, for example "Calc 101 tutoring, $20". A photo and description are optional.
+2. A buyer finds it on **Browse** (no account needed to look around), optionally picks a day and time, and taps **Book**. If they aren't signed in yet, they sign up and come right back.
 3. The provider gets a notification and taps **Accept**.
-4. Both sides now see each other's verified name and photo, and the buyer sees the provider's Venmo.
+4. Both sides now see each other's verified name, and the buyer sees the provider's payment apps (Venmo, Cash App, Zelle, PayPal, or Apple Pay), with tap-to-pay links where the app has one.
 5. They pick a public meetup spot (Fondren entrance, RMC, a college commons).
 6. The buyer taps **I paid**, and the provider taps **Mark complete**. The app shows **Exchange complete**.
 
@@ -28,7 +28,8 @@ Buying an item uses the same flow with **Send request**.
 - Search and categories.
 - Messaging between people.
 - Requests and bookings: accept, decline, or suggest another time.
-- Names and Venmo revealed only after acceptance.
+- Names and payment handles (Venmo, Cash App, Zelle, PayPal, Apple Pay) revealed only after acceptance.
+- Browse, Events, and post pages are open without an account; posting, booking, messaging, likes, comments, and RSVPs ask you to sign in first.
 - Meetup spot, then paid and complete.
 - Notifications: requests, replies, comments, likes, RSVPs, host updates, location reveals, and event reminders.
 - Likes, anonymous comments, saving posts, and shareable post links with previews.
@@ -37,7 +38,7 @@ Buying an item uses the same flow with **Send request**.
 
 **Faked or stubbed:**
 - **Rice verification:** any email works, and every account is shown as a "verified Rice student".
-- **Payments:** no money moves. The app only shows the other person's Venmo handle.
+- **Payments:** no money moves. The app only shows the other person's payment handles.
 - **Notifications are in-app only:** they appear under the bell. There are no phone push notifications, and reminders show up the next time you open the app.
 - **Wanted and Lost & Found:** these sections exist, but posting to them isn't built yet.
 - **Organization verification:** an event can be posted under a club or persona name, but the "verified organization" badge isn't granted to anyone.
@@ -56,8 +57,8 @@ Buying an item uses the same flow with **Send request**.
 1. Open **https://darioushclapp.com/fizzredesign/** in any browser, on a phone or laptop.
 2. Tap **Create account** and enter any name, email, and password.
 3. The core flow needs two people, a provider and a buyer. To test alone, use two browsers (or a normal and a private window) with two accounts:
-   - **Provider:** Profile → Edit profile → add a photo and bio, then Post → Service.
-   - **Buyer:** Browse → open the service → pick a time → Book.
+   - **Provider:** Post → Service → enter a name and cost → Post. Optionally add payment apps in Profile → Edit profile.
+   - **Buyer:** Browse → open the service → Book. Picking a time is optional.
    - **Provider:** tap the bell → New booking request → Accept.
    - **Buyer:** pick a meetup spot → I paid. **Provider:** Mark complete.
 4. **Events:** open the Events tab, pick your interests, then tap **Host an event**, or RSVP to an existing one.

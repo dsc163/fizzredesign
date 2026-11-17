@@ -4,13 +4,15 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { api } from '@/api/client';
+import { useAuth } from '@/auth/AuthProvider';
 import { Screen } from '@/components/Screen';
+import { SignInPrompt } from '@/components/SignInPrompt';
 import { Button, Chip, ErrorText, Field, Label } from '@/components/ui';
 import { Colors, Spacing, Typography } from '@/constants/theme';
 
 const REASONS = ['Scam or fraud', 'Harassment', 'No-show', 'Inappropriate content', 'Something else'];
 
-export default function ReportScreen() {
+function ReportScreenContent() {
   const { threadId, listingId } = useLocalSearchParams<{ threadId?: string; listingId?: string }>();
   const router = useRouter();
   const [reason, setReason] = useState<string | null>(null);
@@ -84,3 +86,9 @@ const styles = StyleSheet.create({
   blockText: { ...Typography.body, color: Colors.text },
   done: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.lg, padding: Spacing.xl },
 });
+
+export default function ReportScreen() {
+  const { user } = useAuth();
+  if (!user) return <SignInPrompt icon="flag-outline" title="Report a post" message="Sign in to report a post or block someone." />;
+  return <ReportScreenContent />;
+}

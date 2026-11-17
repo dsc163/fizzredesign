@@ -6,6 +6,7 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Swit
 import { api, PostType } from '@/api/client';
 import { useAuth } from '@/auth/AuthProvider';
 import { Screen } from '@/components/Screen';
+import { SignInPrompt } from '@/components/SignInPrompt';
 import { TimePicker } from '@/components/TimePicker';
 import { Button, Card, Chip, ErrorText, Field, IconName, Label, PostThumb } from '@/components/ui';
 import { Colors, Radius, Spacing, TypeColors, Typography } from '@/constants/theme';
@@ -41,6 +42,7 @@ export default function PostScreen() {
   const [type, setType] = useState<FormType | null>(null);
   const params = useLocalSearchParams<{ type?: string }>();
   const router = useRouter();
+  const { user } = useAuth();
 
   // "Host an event" on the Events tab opens the event form directly.
   useEffect(() => {
@@ -49,6 +51,16 @@ export default function PostScreen() {
       router.setParams({ type: undefined });
     }
   }, [params.type, router]);
+
+  if (!user) {
+    return (
+      <SignInPrompt
+        icon="add-circle-outline"
+        title="Post on Fizz Marketplace"
+        message="Sign in to sell something, offer a service, or host an event."
+      />
+    );
+  }
 
   if (!type) {
     return (
@@ -102,11 +114,7 @@ function EventForm({ onBack }: { onBack: () => void }) {
   const [error, setError] = useState<string | null>(null);
 
   const ready =
-    title.trim().length >= 3 &&
-    startsAt !== null &&
-    area.trim() !== '' &&
-    (visibility === 'public' || address.trim() !== '') &&
-    (hostAs !== 'custom' || hostName.trim() !== '');
+    title.trim().length >= 2 && startsAt !== null && area.trim() !== '';
 
   async function addPhoto() {
     setError(null);
@@ -192,7 +200,7 @@ function EventForm({ onBack }: { onBack: () => void }) {
           </View>
 
           <Field
-            label="General area (everyone sees this)"
+            label="Where (everyone sees this)"
             value={area}
             onChangeText={setArea}
             placeholder="e.g. Off campus, near Rice Village"
@@ -208,7 +216,7 @@ function EventForm({ onBack }: { onBack: () => void }) {
             <Text style={styles.typeText}>{VISIBILITY.find((v) => v.key === visibility)?.text}</Text>
           </View>
           <Field
-            label={visibility === 'public' ? 'Exact location (optional)' : 'Exact location'}
+            label="Exact spot (optional)"
             value={address}
             onChangeText={setAddress}
             placeholder="e.g. 2415 Rice Blvd, back patio"
@@ -261,7 +269,7 @@ function EventForm({ onBack }: { onBack: () => void }) {
           </View>
 
           <Field
-            label="Description"
+            label="Description (optional)"
             value={description}
             onChangeText={setDescription}
             placeholder="What's happening, who it's for, what to bring…"
@@ -273,7 +281,7 @@ function EventForm({ onBack }: { onBack: () => void }) {
           <Button title="Post event" onPress={submit} loading={busy} disabled={!ready || uploading} />
           {!ready && (
             <Text style={styles.typeText}>
-              Add a name, day and time, and general area{visibility !== 'public' ? ', plus the exact location for RSVPs' : ''}.
+              Add a name, a day and time, and where it is.
             </Text>
           )}
         </ScrollView>
@@ -284,24 +292,20 @@ function EventForm({ onBack }: { onBack: () => void }) {
 
 function PostForm({ type, onBack }: { type: 'item' | 'service'; onBack: () => void }) {
   const router = useRouter();
-  const { user } = useAuth();
   const [photos, setPhotos] = useState<string[]>([]);
   const [title, setTitle] = useState('');
+  const [price, setPrice] = useState('');
+  const [description, setDescription] = useState('');
   const [category, setCategory] = useState<string | null>(null);
   const [condition, setCondition] = useState<string | null>(null);
-  const [price, setPrice] = useState('');
-  const [options, setOptions] = useState([{ label: '', price: '' }]);
-  const [description, setDescription] = useState('');
+  const [extras, setExtras] = useState<{ label: string; price: string }[]>([]);
+  const [showMore, setShowMore] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const isService = type === 'service';
-  const needsProfile = isService && (!user?.photo || !user?.bio);
-  const validOptions = options.filter((o) => o.label.trim() && o.price !== '');
-  const ready = isService
-    ? title.trim().length >= 3 && category && validOptions.length > 0
-    : title.trim().length >= 3 && category && condition && price !== '' && photos.length > 0;
+  const ready = title.trim().length >= 2 && price !== '';
 
   async function addPhoto() {
     setError(null);
@@ -323,12 +327,14 @@ function PostForm({ type, onBack }: { type: 'item' | 'service'; onBack: () => vo
       const { listing } = await api.createListing({
         type,
         title: title.trim(),
-        category,
-        condition,
+        price: Number(price),
         description: description.trim(),
         photos,
-        price: isService ? undefined : Number(price),
-        priceOptions: isService ? validOptions.map((o) => ({ label: o.label.trim(), price: Number(o.price) })) : undefined,
+        category,
+        condition,
+        priceOptions: extras
+          .filter((o) => o.label.trim() && o.price !== '')
+          .map((o) => ({ label: o.label.trim(), price: Number(o.price) })),
       });
       onBack();
       router.push(`/listing/${listing.id}`);
@@ -337,24 +343,6 @@ function PostForm({ type, onBack }: { type: 'item' | 'service'; onBack: () => vo
     } finally {
       setBusy(false);
     }
-  }
-
-  if (needsProfile) {
-    return (
-      <Screen>
-        <View style={styles.content}>
-          <Card>
-            <Text style={styles.typeTitle}>Set up your provider profile first</Text>
-            <Text style={styles.typeText}>
-              Students you don't know are more likely to book you when they can see who you are. Add a profile photo and
-              a short bio, and confirm your name.
-            </Text>
-            <Button title="Edit profile" icon="create-outline" onPress={() => router.push('/profile/edit')} />
-            <Button variant="ghost" title="Back" onPress={onBack} />
-          </Card>
-        </View>
-      </Screen>
-    );
   }
 
   return (
@@ -366,14 +354,25 @@ function PostForm({ type, onBack }: { type: 'item' | 'service'; onBack: () => vo
             <Text style={styles.backText}>Change type</Text>
           </Pressable>
           <Text style={styles.heading}>{isService ? 'New service' : 'New item'}</Text>
-          {isService ? (
-            <Text style={styles.typeText}>Shown with your name, photo, and bio so students know who they're booking.</Text>
-          ) : (
-            <Text style={styles.typeText}>Shown as "Verified Rice student". Your name is shared only after you accept a request.</Text>
-          )}
+
+          <Field
+            label={isService ? 'Name of service' : 'What are you selling?'}
+            value={title}
+            onChangeText={setTitle}
+            placeholder={isService ? 'e.g. Haircuts, Calc tutoring, Airport rides' : 'e.g. TI-84 Plus CE'}
+            maxLength={80}
+          />
+          <Field
+            label={isService ? 'Cost ($)' : 'Price ($)'}
+            value={price}
+            onChangeText={(t) => setPrice(cleanPrice(t))}
+            placeholder="0"
+            keyboardType="decimal-pad"
+            inputMode="decimal"
+          />
 
           <View style={styles.section}>
-            <Label>{isService ? 'PHOTOS (OPTIONAL)' : 'PHOTOS'}</Label>
+            <Label>PHOTO (OPTIONAL)</Label>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
               {photos.map((p) => (
                 <Pressable key={p} onPress={() => setPhotos((all) => all.filter((x) => x !== p))} accessibilityLabel="Remove photo">
@@ -393,82 +392,7 @@ function PostForm({ type, onBack }: { type: 'item' | 'service'; onBack: () => vo
           </View>
 
           <Field
-            label="Title"
-            value={title}
-            onChangeText={setTitle}
-            placeholder={isService ? 'e.g. Fresh Cuts by Gavin' : 'e.g. TI-84 Plus CE'}
-            maxLength={80}
-          />
-
-          <View style={styles.section}>
-            <Label>CATEGORY</Label>
-            <View style={styles.wrap}>
-              {(isService ? SERVICE_CATEGORIES : ITEM_CATEGORIES).map((c) => (
-                <Chip key={c} label={c} selected={category === c} onPress={() => setCategory(c)} />
-              ))}
-            </View>
-          </View>
-
-          {!isService && (
-            <>
-              <View style={styles.section}>
-                <Label>CONDITION</Label>
-                <View style={styles.wrap}>
-                  {CONDITIONS.map((c) => (
-                    <Chip key={c} label={c} selected={condition === c} onPress={() => setCondition(c)} />
-                  ))}
-                </View>
-              </View>
-              <Field
-                label="Price ($)"
-                value={price}
-                onChangeText={(t) => setPrice(cleanPrice(t))}
-                placeholder="0"
-                keyboardType="decimal-pad"
-                inputMode="decimal"
-              />
-            </>
-          )}
-
-          {isService && (
-            <View style={styles.section}>
-              <Label>WHAT YOU OFFER AND PRICES</Label>
-              {options.map((o, i) => (
-                <View key={i} style={styles.optionRow}>
-                  <TextInput
-                    value={o.label}
-                    onChangeText={(t) => setOptions((all) => all.map((x, j) => (j === i ? { ...x, label: t } : x)))}
-                    placeholder={i === 0 ? 'e.g. Haircut' : 'e.g. Haircut + beard trim'}
-                    placeholderTextColor={Colors.textMuted}
-                    style={[styles.input, styles.flex]}
-                  />
-                  <TextInput
-                    value={o.price}
-                    onChangeText={(t) => setOptions((all) => all.map((x, j) => (j === i ? { ...x, price: cleanPrice(t) } : x)))}
-                    placeholder="$"
-                    placeholderTextColor={Colors.textMuted}
-                    keyboardType="decimal-pad"
-                    inputMode="decimal"
-                    style={[styles.input, styles.priceInput]}
-                  />
-                  {options.length > 1 && (
-                    <Ionicons
-                      name="close-circle"
-                      size={22}
-                      color={Colors.textMuted}
-                      onPress={() => setOptions((all) => all.filter((_, j) => j !== i))}
-                    />
-                  )}
-                </View>
-              ))}
-              {options.length < 5 && (
-                <Button variant="ghost" title="Add another option" icon="add" onPress={() => setOptions((all) => [...all, { label: '', price: '' }])} />
-              )}
-            </View>
-          )}
-
-          <Field
-            label="Description"
+            label="Description (optional)"
             value={description}
             onChangeText={setDescription}
             placeholder={isService ? 'What is included, how long it takes, where you meet…' : 'Condition details, pickup location…'}
@@ -476,15 +400,74 @@ function PostForm({ type, onBack }: { type: 'item' | 'service'; onBack: () => vo
             maxLength={1000}
           />
 
+          {!showMore ? (
+            <Button
+              variant="ghost"
+              icon="options-outline"
+              title={isService ? 'More options: category, extra prices' : 'More options: category, condition'}
+              onPress={() => setShowMore(true)}
+            />
+          ) : (
+            <>
+              <View style={styles.section}>
+                <Label>CATEGORY (OPTIONAL)</Label>
+                <View style={styles.wrap}>
+                  {(isService ? SERVICE_CATEGORIES : ITEM_CATEGORIES).map((c) => (
+                    <Chip key={c} label={c} selected={category === c} onPress={() => setCategory(category === c ? null : c)} />
+                  ))}
+                </View>
+              </View>
+              {!isService && (
+                <View style={styles.section}>
+                  <Label>CONDITION (OPTIONAL)</Label>
+                  <View style={styles.wrap}>
+                    {CONDITIONS.map((c) => (
+                      <Chip key={c} label={c} selected={condition === c} onPress={() => setCondition(condition === c ? null : c)} />
+                    ))}
+                  </View>
+                </View>
+              )}
+              {isService && (
+                <View style={styles.section}>
+                  <Label>EXTRA PRICE OPTIONS (OPTIONAL)</Label>
+                  <Text style={styles.typeText}>For example "Haircut + beard trim, $35".</Text>
+                  {extras.map((o, i) => (
+                    <View key={i} style={styles.optionRow}>
+                      <TextInput
+                        value={o.label}
+                        onChangeText={(t) => setExtras((all) => all.map((x, j) => (j === i ? { ...x, label: t } : x)))}
+                        placeholder="Option name"
+                        placeholderTextColor={Colors.textMuted}
+                        style={[styles.input, styles.flex]}
+                      />
+                      <TextInput
+                        value={o.price}
+                        onChangeText={(t) => setExtras((all) => all.map((x, j) => (j === i ? { ...x, price: cleanPrice(t) } : x)))}
+                        placeholder="$"
+                        placeholderTextColor={Colors.textMuted}
+                        keyboardType="decimal-pad"
+                        inputMode="decimal"
+                        style={[styles.input, styles.priceInput]}
+                      />
+                      <Ionicons
+                        name="close-circle"
+                        size={22}
+                        color={Colors.textMuted}
+                        onPress={() => setExtras((all) => all.filter((_, j) => j !== i))}
+                      />
+                    </View>
+                  ))}
+                  {extras.length < 4 && (
+                    <Button variant="ghost" title="Add a price option" icon="add" onPress={() => setExtras((all) => [...all, { label: '', price: '' }])} />
+                  )}
+                </View>
+              )}
+            </>
+          )}
+
           <ErrorText message={error} />
           <Button title="Post" onPress={submit} loading={busy} disabled={!ready || uploading} />
-          {!ready && (
-            <Text style={styles.typeText}>
-              {isService
-                ? 'Add a title, category, and at least one option with a price.'
-                : 'Add a photo, title, category, condition, and price.'}
-            </Text>
-          )}
+          {!ready && <Text style={styles.typeText}>Add a {isService ? 'name and cost' : 'title and price'} to post.</Text>}
         </ScrollView>
       </KeyboardAvoidingView>
     </Screen>

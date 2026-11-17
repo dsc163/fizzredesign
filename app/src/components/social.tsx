@@ -6,6 +6,7 @@ import { api, Comment, Listing, ListingResponse, resolveUrl } from '@/api/client
 import { Colors, Party, Radius, Spacing, Typography } from '@/constants/theme';
 import { formatAgo } from '@/lib/format';
 import { pickAndUploadPhoto } from '@/lib/images';
+import { useRequireSignIn } from '@/lib/requireSignIn';
 import { sharePost } from '@/lib/share';
 
 import { IconName } from './ui';
@@ -53,6 +54,7 @@ export function SocialBar({
   variant?: Variant;
 }) {
   const p = palette[variant];
+  const requireSignIn = useRequireSignIn();
   const [note, setNote] = useState<string | null>(null);
   const s = listing.stats;
 
@@ -71,7 +73,7 @@ export function SocialBar({
         label={String(s.likes)}
         color={s.liked ? p.liked : p.muted}
         accessibilityLabel={s.liked ? 'Unlike' : 'Like'}
-        onPress={() => api.like(listing.id, !s.liked).then(onChange).catch(() => undefined)}
+        onPress={() => requireSignIn(() => api.like(listing.id, !s.liked).then(onChange).catch(() => undefined))}
       />
       <Action icon="chatbubble-outline" label={String(s.comments)} color={p.muted} accessibilityLabel="Comments" onPress={() => undefined} />
       <View style={styles.spacer} />
@@ -81,7 +83,7 @@ export function SocialBar({
         label={s.saved ? 'Saved' : 'Save'}
         color={s.saved ? p.accent : p.muted}
         accessibilityLabel={s.saved ? 'Remove from saved' : 'Save for later'}
-        onPress={() => api.save(listing.id, !s.saved).then(onChange).catch(() => undefined)}
+        onPress={() => requireSignIn(() => api.save(listing.id, !s.saved).then(onChange).catch(() => undefined))}
       />
       <Action icon="share-outline" label="Share" color={p.muted} accessibilityLabel="Share link" onPress={share} />
     </View>
@@ -103,6 +105,7 @@ export function Comments({
   title?: string;
 }) {
   const p = palette[variant];
+  const requireSignIn = useRequireSignIn();
   const [draft, setDraft] = useState('');
   const [photo, setPhoto] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -169,7 +172,7 @@ export function Comments({
         </View>
       )}
       <View style={styles.inputRow}>
-        <Pressable onPress={addPhoto} accessibilityRole="button" accessibilityLabel="Add a photo" style={styles.iconButton}>
+        <Pressable onPress={() => requireSignIn(addPhoto)} accessibilityRole="button" accessibilityLabel="Add a photo" style={styles.iconButton}>
           <Ionicons name="image-outline" size={22} color={p.muted} />
         </Pressable>
         <TextInput
@@ -178,12 +181,12 @@ export function Comments({
           placeholder="Add an anonymous comment"
           placeholderTextColor={p.muted}
           style={[styles.input, { color: p.text, borderColor: p.border, backgroundColor: variant === 'party' ? Party.bg : Colors.background }]}
-          onSubmitEditing={send}
+          onSubmitEditing={() => requireSignIn(send)}
           returnKeyType="send"
           maxLength={500}
         />
         <Pressable
-          onPress={send}
+          onPress={() => requireSignIn(send)}
           disabled={busy || (!draft.trim() && !photo)}
           accessibilityRole="button"
           accessibilityLabel="Post comment"

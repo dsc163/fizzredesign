@@ -3,8 +3,10 @@ import { useCallback, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { api, Thread } from '@/api/client';
+import { useAuth } from '@/auth/AuthProvider';
 import { EmptyState } from '@/components/EmptyState';
 import { Screen } from '@/components/Screen';
+import { SignInPrompt } from '@/components/SignInPrompt';
 import { Avatar, ErrorText, Loading, PostThumb } from '@/components/ui';
 import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
 import { formatAgo } from '@/lib/format';
@@ -18,7 +20,7 @@ const STATUS: Record<Thread['status'], { label: string; fg: string; bg: string }
   completed: { label: 'Complete', fg: Colors.success, bg: Colors.successSoft },
 };
 
-export default function MessagesScreen() {
+function MessagesScreenContent() {
   const [threads, setThreads] = useState<Thread[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -134,3 +136,9 @@ const styles = StyleSheet.create({
   },
   unreadCount: { color: '#FFFFFF', fontSize: 12, fontWeight: '700' },
 });
+
+export default function MessagesScreen() {
+  const { user } = useAuth();
+  if (!user) return <SignInPrompt icon="chatbubbles-outline" title="Your messages" message="Sign in to message buyers and sellers and keep track of your requests." />;
+  return <MessagesScreenContent />;
+}

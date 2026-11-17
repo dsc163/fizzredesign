@@ -20,6 +20,8 @@ const ITEM_CATEGORIES = ['Textbooks', 'Electronics', 'Dorm', 'Furniture', 'Cloth
 const CONDITIONS = ['New', 'Like new', 'Good', 'Fair'];
 const EVENT_TAGS = ['Parties', 'Sports', 'Clubs', 'Performances', 'Food', 'Study', 'Pop-ups'];
 const VISIBILITIES = ['public', 'rsvp', 'reveal'];
+const PAYMENT_KEYS = ['venmo', 'cashapp', 'zelle', 'paypal', 'applepay'] as const;
+type Payments = Partial<Record<(typeof PAYMENT_KEYS)[number], string>>;
 
 // ---------- helpers ----------
 
@@ -126,6 +128,7 @@ type UserRow = {
   venmo: string | null;
   interests: string | null;
   prefs: string | null;
+  payments: string | null;
   created_at: number;
 };
 
@@ -185,6 +188,12 @@ function prefsOf(user: UserRow): Prefs {
 
 // ---------- serialization ----------
 
+function paymentsOf(u: UserRow): Payments {
+  const stored = parse<Payments>(u.payments, {});
+  if (!stored.venmo && u.venmo) stored.venmo = u.venmo;
+  return Object.fromEntries(PAYMENT_KEYS.filter((k) => stored[k]).map((k) => [k, stored[k]])) as Payments;
+}
+
 function publicUser(u: UserRow) {
   return {
     id: u.id,
@@ -193,7 +202,7 @@ function publicUser(u: UserRow) {
     college: u.college,
     bio: u.bio,
     photo: u.photo,
-    venmo: u.venmo,
+    payments: paymentsOf(u),
     interests: parse<string[] | null>(u.interests, null),
     prefs: prefsOf(u),
   };
@@ -472,21 +481,29 @@ async function updateMe(request: Request, env: Env, user: UserRow) {
   const interests = Array.isArray(body.interests)
     ? JSON.stringify(body.interests.filter((t): t is string => EVENT_TAGS.includes(t as string)))
     : user.interests;
+  let payments = user.payments;
+  if (body.payments && typeof body.payments === 'object') {
+    const input = body.payments as Record<string, unknown>;
+    payments = JSON.stringify(
+      Object.fromEntries(PAYMENT_KEYS.map((k) => [k, str(input[k], 60)]).filter(([, v]) => v))
+    );
+  }
   const prefs =
     body.prefs && typeof body.prefs === 'object'
       ? JSON.stringify({ ...prefsOf(user), ...(body.prefs as Partial<Prefs>) })
       : user.prefs;
   await env.DB.prepare(
-    `UPDATE users SET name = ?, college = ?, bio = ?, photo = ?, venmo = ?, interests = ?, prefs = ? WHERE id = ?`
+    `UPDATE users SET name = ?, college = ?, bio = ?, photo = ?, venmo = ?, interests = ?, prefs = ?, payments = ? WHERE id = ?`
   )
     .bind(
       name,
       pick('college', 40, user.college),
       pick('bio', 300, user.bio),
       body.photo !== undefined ? imageUrl(body.photo) : user.photo,
-      pick('venmo', 40, user.venmo),
+      payments ? parse<Payments>(payments, {}).venmo ?? null : user.venmo,
       interests,
       prefs,
+      payments,
       user.id
     )
     .run();
@@ -650,7 +667,7 @@ async function createListing(request: Request, env: Env, user: UserRow) {
   const description = str(body.description, 1000);
   const category = str(body.category, 40);
   const photos = Array.isArray(body.photos) ? body.photos.map(imageUrl).filter((p): p is string => p !== null).slice(0, 5) : [];
-  if (title.length < 3) bad('Add a title (at least 3 characters).');
+  if (title.length < 2) bad('Add a title.');
 
   const id = crypto.randomUUID();
   const now = Date.now();
@@ -661,13 +678,11 @@ async function createListing(request: Request, env: Env, user: UserRow) {
     if (startsAt === null || startsAt < now - HOUR) bad('Pick a start time that has not passed.');
     if (hours <= 0 || hours > 24) bad('Pick how long the event runs.');
     const area = str(body.area, 80);
-    if (!area) bad('Add a general area, like "Near Rice Village" or "Baker commons".');
+    if (!area) bad('Add where it is, like "Baker commons" or "Near Rice Village".');
     const visibility = VISIBILITIES.includes(str(body.visibility, 10)) ? str(body.visibility, 10) : 'public';
     const address = str(body.address, 120) || null;
-    if (visibility !== 'public' && !address) bad('Add the exact location to share with RSVPs.');
     const hostMode = str(body.hostAs, 20);
-    const hostName = hostMode === 'me' ? user.name : hostMode === 'custom' ? str(body.hostName, 40) : 'Anonymous';
-    if (!hostName) bad('Add the name to post as.');
+    const hostName = hostMode === 'me' ? user.name : (hostMode === 'custom' && str(body.hostName, 40)) || 'Anonymous';
     const tags = Array.isArray(body.tags) ? body.tags.filter((t): t is string => EVENT_TAGS.includes(t as string)) : [];
     const details = {
       starts_at: startsAt,
@@ -693,21 +708,19 @@ async function createListing(request: Request, env: Env, user: UserRow) {
     let priceOptions: { label: string; price: number }[] = [];
     let condition: string | null = null;
     if (type === 'item') {
-      if (!ITEM_CATEGORIES.includes(category)) bad('Pick a category.');
-      condition = str(body.condition, 20);
-      if (!CONDITIONS.includes(condition)) bad('Pick a condition.');
+      condition = CONDITIONS.includes(str(body.condition, 20)) ? str(body.condition, 20) : null;
       price = num(body.price);
       if (price === null || price < 0 || price > 100000) bad('Enter a price.');
-      if (photos.length === 0) bad('Add at least one photo.');
     } else if (type === 'service') {
-      if (!user.bio || !user.photo) bad('Add a profile photo and a short bio before posting a service.');
-      if (!SERVICE_CATEGORIES.includes(category)) bad('Pick a service category.');
+      // One cost is enough; extra options (e.g. "Haircut + beard trim") are optional.
       const raw = Array.isArray(body.priceOptions) ? body.priceOptions : [];
       priceOptions = raw
         .map((o: { label?: unknown; price?: unknown }) => ({ label: str(o?.label, 60), price: num(o?.price) }))
         .filter((o): o is { label: string; price: number } => o.label.length > 0 && o.price !== null && o.price >= 0)
         .slice(0, 5);
-      if (priceOptions.length === 0) bad('Add at least one service with a price.');
+      const base = num(body.price);
+      if (base !== null && base >= 0) priceOptions = [{ label: title, price: base }, ...priceOptions].slice(0, 5);
+      if (priceOptions.length === 0) bad('Enter a cost.');
       price = Math.min(...priceOptions.map((o) => o.price));
     } else {
       bad('You can post an item, a service, or an event.');
@@ -716,7 +729,19 @@ async function createListing(request: Request, env: Env, user: UserRow) {
       `INSERT INTO listings (id, user_id, type, title, description, price, price_options, category, condition, photos, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
-      .bind(id, user.id, type, title, description, price, JSON.stringify(priceOptions), category, condition, JSON.stringify(photos), now)
+      .bind(
+        id,
+        user.id,
+        type,
+        title,
+        description,
+        price,
+        JSON.stringify(priceOptions),
+        (type === 'item' ? ITEM_CATEGORIES : SERVICE_CATEGORIES).includes(category) ? category : 'Other',
+        condition,
+        JSON.stringify(photos),
+        now
+      )
       .run();
   }
   const [listing] = await serializeMany(env, [(await loadListing(env, id))!], user.id);
@@ -926,13 +951,13 @@ async function counterpartFor(env: Env, thread: ThreadRow, viewer: UserRow, list
   const other = await loadUser(env, otherParty(thread, viewer.id));
   const revealed = thread.status === 'accepted' || thread.status === 'completed';
   if (revealed) {
-    return { id: other.id, revealed: true, name: other.name, college: other.college, bio: other.bio, photo: other.photo, venmo: other.venmo };
+    return { id: other.id, revealed: true, name: other.name, college: other.college, bio: other.bio, photo: other.photo, payments: paymentsOf(other) };
   }
   // Service providers are public before acceptance; everyone else stays anonymous.
   if (other.id === thread.seller_id && listingType === 'service') {
-    return { id: other.id, revealed: false, name: other.name, college: other.college, bio: other.bio, photo: other.photo, venmo: null };
+    return { id: other.id, revealed: false, name: other.name, college: other.college, bio: other.bio, photo: other.photo, payments: {} };
   }
-  return { id: other.id, revealed: false, name: 'Verified Rice student', college: null, bio: null, photo: null, venmo: null };
+  return { id: other.id, revealed: false, name: 'Verified Rice student', college: null, bio: null, photo: null, payments: {} };
 }
 
 async function serializeThread(env: Env, thread: ThreadRow, viewer: UserRow, withMessages: boolean) {
@@ -1070,8 +1095,9 @@ async function requestThread(request: Request, env: Env, user: UserRow, id: stri
   const listing = (await loadListing(env, thread.listing_id))!;
   if (listing.status !== 'active') bad('This listing is no longer available.');
   const body = await readJson(request);
+  // A time is optional; without one the two sides arrange it in chat.
   const time = num(body.proposedTime);
-  if (time === null || time < Date.now() - HOUR) bad('Pick a time that has not passed.');
+  if (time !== null && time < Date.now() - HOUR) bad('Pick a time that has not passed.');
   let optionLabel: string | null = null;
   let price = listing.price;
   if (listing.type === 'service') {
@@ -1096,7 +1122,7 @@ async function requestThread(request: Request, env: Env, user: UserRow, id: stri
     thread.seller_id,
     'request',
     isService ? 'New booking request' : 'New purchase request',
-    `${optionLabel ?? listing.title} · ${houstonLabel(time)}`,
+    `${optionLabel ?? listing.title}${time ? ` · ${houstonLabel(time)}` : ' · time to arrange in chat'}`,
     `/thread/${id}`
   );
   return getThread(env, user, id);

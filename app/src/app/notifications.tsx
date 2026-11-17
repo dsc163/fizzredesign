@@ -4,8 +4,10 @@ import { useCallback, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { api, Notification } from '@/api/client';
+import { useAuth } from '@/auth/AuthProvider';
 import { EmptyState } from '@/components/EmptyState';
 import { Screen } from '@/components/Screen';
+import { SignInPrompt } from '@/components/SignInPrompt';
 import { IconName, Loading } from '@/components/ui';
 import { Colors, Party, Radius, Spacing, Typography } from '@/constants/theme';
 import { useBadges } from '@/lib/badges';
@@ -31,7 +33,7 @@ const ICONS: Record<string, { icon: IconName; color: string }> = {
   reminder: { icon: 'alarm', color: Party.pink },
 };
 
-export default function NotificationsScreen() {
+function NotificationsScreenContent() {
   const router = useRouter();
   const { refresh } = useBadges();
   const [items, setItems] = useState<Notification[] | null>(null);
@@ -103,3 +105,9 @@ const styles = StyleSheet.create({
   time: { ...Typography.caption, color: Colors.textMuted },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.primary, marginTop: 6 },
 });
+
+export default function NotificationsScreen() {
+  const { user } = useAuth();
+  if (!user) return <SignInPrompt icon="notifications-outline" title="Notifications" message="Sign in to get notified about requests, replies, and events." />;
+  return <NotificationsScreenContent />;
+}

@@ -1,3 +1,4 @@
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -8,6 +9,8 @@ import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
 
 export default function WelcomeScreen() {
   const { signIn, signUp } = useAuth();
+  const router = useRouter();
+  const { next } = useLocalSearchParams<{ next?: string }>();
   const [mode, setMode] = useState<'signup' | 'signin'>('signup');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -91,6 +94,12 @@ export default function WelcomeScreen() {
               }}
             />
           </View>
+
+          <Button
+            variant="secondary"
+            title="Just browsing for now"
+            onPress={() => (router.canGoBack() ? router.back() : router.replace((next as never) || '/'))}
+          />
 
           <Text style={styles.note}>
             This is a test version. Any email address works, and Rice email verification is simulated.
