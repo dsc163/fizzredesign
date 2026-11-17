@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
 import { api, PostType } from '@/api/client';
 import { useAuth } from '@/auth/AuthProvider';
@@ -39,6 +39,16 @@ function cleanPrice(text: string) {
 
 export default function PostScreen() {
   const [type, setType] = useState<FormType | null>(null);
+  const params = useLocalSearchParams<{ type?: string }>();
+  const router = useRouter();
+
+  // "Host an event" on the Events tab opens the event form directly.
+  useEffect(() => {
+    if (params.type === 'event') {
+      setType('event');
+      router.setParams({ type: undefined });
+    }
+  }, [params.type, router]);
 
   if (!type) {
     return (
@@ -85,6 +95,7 @@ function EventForm({ onBack }: { onBack: () => void }) {
   const [hostName, setHostName] = useState('');
   const [entry, setEntry] = useState('');
   const [tags, setTags] = useState<string[]>([]);
+  const [namedRsvps, setNamedRsvps] = useState(false);
   const [description, setDescription] = useState('');
   const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -128,6 +139,7 @@ function EventForm({ onBack }: { onBack: () => void }) {
         hostName: hostName.trim(),
         entry: entry.trim(),
         tags,
+        namedRsvps,
       });
       onBack();
       router.push(`/listing/${listing.id}`);
@@ -217,6 +229,16 @@ function EventForm({ onBack }: { onBack: () => void }) {
                 />
               ))}
             </View>
+          </View>
+
+          <View style={styles.switchRow}>
+            <View style={styles.flex}>
+              <Text style={styles.typeTitle}>Named RSVPs</Text>
+              <Text style={styles.typeText}>
+                See who's coming. Guests are told their name will be shared before they RSVP. Off means RSVPs stay anonymous.
+              </Text>
+            </View>
+            <Switch value={namedRsvps} onValueChange={setNamedRsvps} />
           </View>
 
           <View style={styles.section}>
@@ -527,4 +549,5 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
   },
   priceInput: { width: 80 },
+  switchRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
 });

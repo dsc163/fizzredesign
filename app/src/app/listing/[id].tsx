@@ -1,36 +1,32 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { api, EventUpdate, Listing, ThreadStatus } from '@/api/client';
+import { api, Listing, ListingResponse } from '@/api/client';
 import { EmptyState } from '@/components/EmptyState';
-import { locationLine } from '@/components/EventCard';
+import { EventDetail } from '@/components/EventDetail';
 import { Screen } from '@/components/Screen';
+import { Comments, SocialBar } from '@/components/social';
 import { TimePicker } from '@/components/TimePicker';
 import { Avatar, Button, Card, Chip, ErrorText, Label, Loading, PostThumb, TypeLabel, VerifiedBadge } from '@/components/ui';
-import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
-import { formatDateTime, formatDay, formatPrice, formatTime } from '@/lib/format';
+import { Colors, Party, Radius, Spacing, Typography } from '@/constants/theme';
+import { formatDateTime, formatPrice } from '@/lib/format';
 
 const QUICK_MESSAGES = ['Is this still available?', 'Are you free this week?'];
 
 export default function ListingScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const [listing, setListing] = useState<Listing | null>(null);
-  const [myThread, setMyThread] = useState<{ id: string; status: ThreadStatus } | null>(null);
-  const [updates, setUpdates] = useState<EventUpdate[]>([]);
+  const [data, setData] = useState<ListingResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const result = await api.listing(id);
-      setListing(result.listing);
-      setMyThread(result.myThread);
-      setUpdates(result.updates ?? []);
+      setData(await api.listing(id));
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not load this listing.');
+      setError(e instanceof Error ? e.message : 'Could not load this post.');
     }
   }, [id]);
 
@@ -40,14 +36,34 @@ export default function ListingScreen() {
     }, [load])
   );
 
-  if (error && !listing) {
+  if (error && !data) {
     return (
       <Screen>
-        <EmptyState icon="alert-circle-outline" title="Listing unavailable" message={error} />
+        <EmptyState icon="alert-circle-outline" title="Post unavailable" message={error} />
       </Screen>
     );
   }
-  if (!listing) return <Loading />;
+  if (!data) return <Loading />;
+
+  const { listing, myThread, comments } = data;
+  const setListing = (l: Listing) => setData((d) => (d ? { ...d, listing: l } : d));
+
+  if (listing.type === 'event') {
+    return (
+      <>
+        <Stack.Screen
+          options={{
+            title: 'Event',
+            headerStyle: { backgroundColor: Party.bg },
+            headerTintColor: Party.text,
+            headerTitleStyle: { color: Party.text, fontWeight: '800' },
+            contentStyle: { backgroundColor: Party.bg },
+          }}
+        />
+        <EventDetail data={data} onChange={setData} />
+      </>
+    );
+  }
 
   const backTitle = { service: 'Service', item: 'Goods', event: 'Event', wanted: 'Wanted', lost: 'Lost & Found', found: 'Lost & Found' }[listing.type];
 
@@ -57,13 +73,15 @@ export default function ListingScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <Photos listing={listing} />
         <View style={styles.titleBlock}>
-          <TypeLabel type={listing.type} extra={listing.type === 'event' ? null : listing.category} />
+          <TypeLabel type={listing.type} extra={listing.category} />
           <Text style={styles.title}>{listing.title}</Text>
           {listing.type === 'item' && <Text style={styles.price}>{formatPrice(listing.price)}</Text>}
           {listing.status !== 'active' && (
             <Text style={styles.statusNote}>This listing is {listing.status === 'sold' ? 'sold' : 'paused'}.</Text>
           )}
         </View>
+
+        <SocialBar listing={listing} onChange={setData} />
 
         <AuthorBlock listing={listing} />
 
@@ -84,35 +102,9 @@ export default function ListingScreen() {
           </Card>
         )}
 
-        {listing.type === 'event' && (
-          <EventPanel
-            listing={listing}
-            updates={updates}
-            onChange={(r) => {
-              setListing(r.listing);
-              setUpdates(r.updates ?? []);
-            }}
-          />
-        )}
-        {listing.type === 'wanted' && listing.details.needed_by && (
-          <Detail icon="time-outline" text={`Needed by ${formatDateTime(listing.details.needed_by)}`} />
-        )}
-        {listing.type === 'wanted' && listing.price ? (
-          <Detail icon="cash-outline" text={`Offering ${formatPrice(listing.price)}`} />
-        ) : null}
-        {listing.type === 'lost' && (
-          <>
-            {listing.details.last_seen && <Detail icon="location-outline" text={`Last seen ${listing.details.last_seen}`} />}
-            {listing.price ? <Detail icon="gift-outline" text={`${formatPrice(listing.price)} finder's tip`} /> : null}
-          </>
-        )}
-        {listing.type === 'found' && listing.details.found_at && (
-          <Detail icon="location-outline" text={`Found at ${listing.details.found_at}`} />
-        )}
-
-        {listing.isMine && listing.type !== 'event' ? (
+        {listing.isMine ? (
           <OwnerPanel listing={listing} onChange={setListing} />
-        ) : listing.type === 'event' ? null : listing.type === 'item' || listing.type === 'service' ? (
+        ) : listing.type === 'item' || listing.type === 'service' ? (
           listing.status === 'active' ? (
             myThread && myThread.status !== 'declined' ? (
               <Card>
@@ -125,9 +117,9 @@ export default function ListingScreen() {
               <RequestPanel listing={listing} existingThreadId={myThread?.id ?? null} />
             )
           ) : null
-        ) : (
-          <Text style={styles.notice}>Responding to Wanted and Lost & Found posts is coming soon in this test version.</Text>
-        )}
+        ) : null}
+
+        <Comments listing={listing} comments={comments} onChange={setData} />
 
         {!listing.isMine && (
           <Pressable onPress={() => router.push({ pathname: '/report', params: { listingId: listing.id } })}>
@@ -192,150 +184,6 @@ function AuthorBlock({ listing }: { listing: Listing }) {
       <Ionicons name="shield-checkmark-outline" size={18} color={Colors.success} />
       <Text style={styles.authorMeta}>Posted by a verified Rice student. Names are shared once a request is accepted.</Text>
     </View>
-  );
-}
-
-function calendarLink(listing: Listing) {
-  const d = listing.details;
-  const stamp = (ms: number) => new Date(ms).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
-  const params = new URLSearchParams({
-    action: 'TEMPLATE',
-    text: listing.title,
-    dates: `${stamp(d.starts_at ?? Date.now())}/${stamp(d.ends_at ?? (d.starts_at ?? Date.now()) + 7200000)}`,
-    details: `${listing.description}\n\nFrom Fizz Marketplace`,
-    location: d.address ?? d.area ?? '',
-  });
-  return `https://calendar.google.com/calendar/render?${params}`;
-}
-
-function EventPanel({
-  listing,
-  updates,
-  onChange,
-}: {
-  listing: Listing;
-  updates: EventUpdate[];
-  onChange: (r: { listing: Listing; updates: EventUpdate[] }) => void;
-}) {
-  const d = listing.details;
-  const [busy, setBusy] = useState(false);
-  const [draft, setDraft] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const going = Boolean(d.my_going);
-  const saved = Boolean(d.my_saved);
-
-  async function run(fn: () => Promise<{ listing: Listing; updates: EventUpdate[] }>) {
-    setBusy(true);
-    setError(null);
-    try {
-      onChange(await fn());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong.');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <>
-      <Card>
-        {d.starts_at && (
-          <Text style={styles.cardTitle}>
-            {formatDay(d.starts_at)} · {formatTime(d.starts_at)}
-            {d.ends_at ? ` to ${formatTime(d.ends_at)}` : ''}
-          </Text>
-        )}
-        <View style={[styles.locationBox, d.address ? styles.locationOpen : null]}>
-          <Ionicons
-            name={d.address ? 'location' : 'lock-closed-outline'}
-            size={16}
-            color={d.address ? Colors.success : Colors.warning}
-          />
-          <View style={styles.flex}>
-            <Text style={[styles.locationText, d.address ? styles.locationTextOpen : null]}>{locationLine(listing)}</Text>
-            {d.address && d.area && d.address !== d.area ? (
-              <Text style={styles.locationSub}>{d.area}</Text>
-            ) : null}
-            {!d.address && !going ? <Text style={styles.locationSub}>RSVP to get the exact location.</Text> : null}
-          </View>
-        </View>
-        {d.entry && (
-          <Text style={styles.detailText}>
-            <Text style={styles.bold}>Entry:</Text> {d.entry}
-          </Text>
-        )}
-        <View style={styles.tags}>
-          {(d.tags ?? []).map((t) => (
-            <View key={t} style={styles.tag}>
-              <Text style={styles.tagText}>{t}</Text>
-            </View>
-          ))}
-          <View style={styles.tag}>
-            <Text style={styles.tagText}>{d.rsvps ?? 0} going</Text>
-          </View>
-        </View>
-      </Card>
-
-      {listing.isMine ? (
-        <Card>
-          <Text style={styles.cardTitle}>You're hosting this event</Text>
-          <Text style={styles.detailText}>{d.rsvps ?? 0} people are going. Post an update to let everyone know what's happening.</Text>
-        </Card>
-      ) : (
-        <View style={styles.eventActions}>
-          <Button
-            style={styles.flex2}
-            title={going ? 'Going ✓' : 'RSVP'}
-            variant={going ? 'secondary' : 'primary'}
-            loading={busy}
-            onPress={() => run(() => api.rsvp(listing.id, { going: !going }))}
-          />
-          <Button
-            style={styles.flex}
-            variant="secondary"
-            title={saved ? 'Saved' : 'Save'}
-            icon={saved ? 'bookmark' : 'bookmark-outline'}
-            onPress={() => run(() => api.rsvp(listing.id, { saved: !saved }))}
-          />
-          <Button style={styles.flex} variant="secondary" title="Cal" icon="calendar-outline" onPress={() => Linking.openURL(calendarLink(listing))} />
-        </View>
-      )}
-      {going && !listing.isMine && (
-        <Text style={styles.finePrint}>You're going. Tap Cal to add it to your calendar so you don't forget.</Text>
-      )}
-      <ErrorText message={error} />
-
-      <Card>
-        <Label>LIVE UPDATES</Label>
-        {updates.length === 0 ? (
-          <Text style={styles.detailText}>No updates from the host yet.</Text>
-        ) : (
-          updates.map((u) => (
-            <View key={u.id} style={styles.update}>
-              <Text style={styles.updateMeta}>Host · {formatDay(u.createdAt)} {formatTime(u.createdAt)}</Text>
-              <Text style={styles.updateBody}>{u.body}</Text>
-            </View>
-          ))
-        )}
-        {listing.isMine && (
-          <View style={styles.updateInput}>
-            <TextInput
-              value={draft}
-              onChangeText={setDraft}
-              placeholder="e.g. Doors open! Bring your Rice ID."
-              placeholderTextColor={Colors.textMuted}
-              style={styles.input}
-            />
-            <Button
-              title="Post"
-              disabled={!draft.trim()}
-              loading={busy}
-              onPress={() => run(() => api.postUpdate(listing.id, draft.trim())).then(() => setDraft(''))}
-            />
-          </View>
-        )}
-      </Card>
-    </>
   );
 }
 

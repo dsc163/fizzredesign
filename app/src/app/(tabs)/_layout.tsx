@@ -1,62 +1,31 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { BottomTabNavigationOptions, Tabs } from 'expo-router/js-tabs';
-import { ComponentProps, useEffect, useState } from 'react';
+import { ComponentProps } from 'react';
 import { Platform } from 'react-native';
 
-import { api } from '@/api/client';
-import { useAuth } from '@/auth/AuthProvider';
-import { Colors, Typography } from '@/constants/theme';
+import { HeaderBell } from '@/components/HeaderBell';
+import { Colors, Party, Typography } from '@/constants/theme';
+import { useBadges } from '@/lib/badges';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
-function tabIcon(
-  active: IconName,
-  inactive: IconName
-): BottomTabNavigationOptions['tabBarIcon'] {
+function tabIcon(active: IconName, inactive: IconName, activeColor: string = Colors.primary): BottomTabNavigationOptions['tabBarIcon'] {
   return ({ focused, size }) => (
-    <Ionicons
-      name={focused ? active : inactive}
-      size={size}
-      color={focused ? Colors.primary : Colors.textMuted}
-    />
+    <Ionicons name={focused ? active : inactive} size={size} color={focused ? activeColor : Colors.textMuted} />
   );
 }
 
-// Total unread messages, refreshed every 10 seconds for the tab badge.
-function useUnreadCount() {
-  const { user } = useAuth();
-  const [count, setCount] = useState(0);
-  useEffect(() => {
-    if (!user) return;
-    let active = true;
-    const load = () =>
-      api
-        .threads()
-        .then((r) => active && setCount(r.threads.reduce((n, t) => n + t.unread, 0)))
-        .catch(() => undefined);
-    load();
-    const timer = setInterval(load, 10000);
-    return () => {
-      active = false;
-      clearInterval(timer);
-    };
-  }, [user]);
-  return user ? count : 0;
-}
+// Web has no bottom safe-area inset, so give the labels room.
+const webTabBar = Platform.OS === 'web' ? { height: 58, paddingBottom: 6 } : {};
 
 export default function TabLayout() {
-  const unread = useUnreadCount();
+  const { messages } = useBadges();
   return (
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: Colors.primary,
         tabBarInactiveTintColor: Colors.textMuted,
-        tabBarStyle: {
-          backgroundColor: Colors.background,
-          borderTopColor: Colors.border,
-          // Web has no bottom safe-area inset, so give the labels room.
-          ...(Platform.OS === 'web' && { height: 58, paddingBottom: 6 }),
-        },
+        tabBarStyle: { backgroundColor: Colors.background, borderTopColor: Colors.border, ...webTabBar },
         headerStyle: { backgroundColor: Colors.background },
         headerTitleStyle: { ...Typography.heading, color: Colors.text },
         sceneStyle: { backgroundColor: Colors.background },
@@ -67,6 +36,21 @@ export default function TabLayout() {
           title: 'Browse',
           headerTitle: 'Marketplace',
           tabBarIcon: tabIcon('storefront', 'storefront-outline'),
+          headerRight: () => <HeaderBell />,
+        }}
+      />
+      <Tabs.Screen
+        name="events"
+        options={{
+          title: 'Events',
+          headerTitle: 'Events',
+          tabBarIcon: tabIcon('sparkles', 'sparkles-outline', Party.pink),
+          tabBarActiveTintColor: Party.pink,
+          tabBarStyle: { backgroundColor: Party.bg, borderTopColor: Party.cardBorder, ...webTabBar },
+          headerStyle: { backgroundColor: Party.bg },
+          headerTitleStyle: { ...Typography.heading, color: Party.text, fontWeight: '900' },
+          sceneStyle: { backgroundColor: Party.bg },
+          headerRight: () => <HeaderBell color={Party.text} />,
         }}
       />
       <Tabs.Screen
@@ -81,8 +65,8 @@ export default function TabLayout() {
         name="messages"
         options={{
           title: 'Messages',
-          tabBarBadge: unread > 0 ? unread : undefined,
           tabBarIcon: tabIcon('chatbubbles', 'chatbubbles-outline'),
+          tabBarBadge: messages > 0 ? messages : undefined,
         }}
       />
       <Tabs.Screen
@@ -91,6 +75,7 @@ export default function TabLayout() {
           title: 'Profile',
           headerTitle: 'Profile',
           tabBarIcon: tabIcon('person-circle', 'person-circle-outline'),
+          headerRight: () => <HeaderBell />,
         }}
       />
     </Tabs>

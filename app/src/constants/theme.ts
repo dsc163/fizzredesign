@@ -55,3 +55,20 @@ export const TypeColors: Record<string, { fg: string; bg: string }> = {
   lost: { fg: '#B91C1C', bg: '#FEF2F2' },
   found: { fg: '#0F766E', bg: '#ECFDF9' },
 };
+
+// Night-out palette for the Events tab.
+export const Party = {
+  bg: '#0E0A1C',
+  card: '#1A1433',
+  cardBorder: '#2F2657',
+  text: '#FFFFFF',
+  textSecondary: '#C4BCE6',
+  muted: '#8479AD',
+  pink: '#FF3D9A',
+  purple: '#8B5CF6',
+  cyan: '#22D3EE',
+  yellow: '#FACC15',
+  green: '#34D399',
+  gradient: ['#FF3D9A', '#8B5CF6'] as const,
+  glow: ['#FF3D9A', '#8B5CF6', '#22D3EE'] as const,
+} as const;

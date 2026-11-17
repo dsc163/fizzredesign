@@ -1,13 +1,15 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { api } from '@/api/client';
 import { useAuth } from '@/auth/AuthProvider';
 import { Screen } from '@/components/Screen';
-import { Avatar, Button, ErrorText, Field } from '@/components/ui';
+import { Avatar, Button, Chip, ErrorText, Field, Label } from '@/components/ui';
 import { Colors, Spacing, Typography } from '@/constants/theme';
 import { pickAndUploadPhoto } from '@/lib/images';
+
+const INTERESTS = ['Parties', 'Sports', 'Clubs', 'Performances', 'Food', 'Study', 'Pop-ups'];
 
 export default function EditProfileScreen() {
   const { user, setUser } = useAuth();
@@ -17,6 +19,9 @@ export default function EditProfileScreen() {
   const [bio, setBio] = useState(user?.bio ?? '');
   const [venmo, setVenmo] = useState(user?.venmo ?? '');
   const [photo, setPhoto] = useState(user?.photo ?? null);
+  const [interests, setInterests] = useState<string[]>(user?.interests ?? []);
+  const [remindDay, setRemindDay] = useState(user?.prefs.remindDay ?? true);
+  const [remindHour, setRemindHour] = useState(user?.prefs.remindHour ?? true);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +44,15 @@ export default function EditProfileScreen() {
     setSaving(true);
     try {
       const handle = venmo.trim() && !venmo.trim().startsWith('@') ? `@${venmo.trim()}` : venmo.trim();
-      const result = await api.updateMe({ name: name.trim(), college: college.trim(), bio: bio.trim(), venmo: handle, photo });
+      const result = await api.updateMe({
+        name: name.trim(),
+        college: college.trim(),
+        bio: bio.trim(),
+        venmo: handle,
+        photo,
+        interests,
+        prefs: { remindDay, remindHour },
+      });
       setUser(result.user);
       router.back();
     } catch (e) {
@@ -77,6 +90,30 @@ export default function EditProfileScreen() {
             autoCapitalize="none"
             hint="Only shown to the other person after you accept a request."
           />
+          <View style={styles.section}>
+            <Label>EVENT INTERESTS</Label>
+            <View style={styles.wrap}>
+              {INTERESTS.map((t) => (
+                <Chip
+                  key={t}
+                  label={t}
+                  selected={interests.includes(t)}
+                  onPress={() => setInterests((all) => (all.includes(t) ? all.filter((x) => x !== t) : [...all, t]))}
+                />
+              ))}
+            </View>
+          </View>
+          <View style={styles.section}>
+            <Label>EVENT REMINDERS</Label>
+            <View style={styles.switchRow}>
+              <Text style={styles.switchText}>The day before</Text>
+              <Switch value={remindDay} onValueChange={setRemindDay} />
+            </View>
+            <View style={styles.switchRow}>
+              <Text style={styles.switchText}>1 hour before</Text>
+              <Switch value={remindHour} onValueChange={setRemindHour} />
+            </View>
+          </View>
           <ErrorText message={error} />
           <Button title="Save" onPress={save} loading={saving} disabled={uploading} />
         </ScrollView>
@@ -90,4 +127,8 @@ const styles = StyleSheet.create({
   content: { padding: Spacing.lg, gap: Spacing.lg },
   photo: { alignItems: 'center', gap: Spacing.sm },
   photoText: { ...Typography.caption, fontWeight: '600', color: Colors.primary },
+  section: { gap: Spacing.sm },
+  wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  switchText: { ...Typography.body, color: Colors.text },
 });

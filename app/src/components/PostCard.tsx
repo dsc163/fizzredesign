@@ -69,6 +69,13 @@ export function PostCard({ listing }: { listing: Listing }) {
               {extra}
             </Text>
           )}
+          {(listing.stats.likes > 0 || listing.stats.comments > 0 || listing.stats.saved) && (
+            <Text style={styles.stats}>
+              {listing.stats.likes > 0 ? `♥ ${listing.stats.likes}   ` : ''}
+              {listing.stats.comments > 0 ? `💬 ${listing.stats.comments}   ` : ''}
+              {listing.stats.saved ? 'Saved' : ''}
+            </Text>
+          )}
         </View>
         {showPrice && <Text style={styles.price}>{formatPrice(listing.price)}</Text>}
         </View>
@@ -95,4 +102,5 @@ const styles = StyleSheet.create({
   title: { ...Typography.heading, fontSize: 16, color: Colors.text },
   subtitle: { ...Typography.caption, color: Colors.textSecondary },
   price: { ...Typography.heading, color: Colors.text, alignSelf: 'center' },
+  stats: { ...Typography.caption, color: Colors.textMuted },
 });

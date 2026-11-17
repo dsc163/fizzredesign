@@ -85,3 +85,13 @@ export function shortName(name: string) {
   const parts = name.trim().split(/\s+/);
   return parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1][0]}.` : name;
 }
+
+// Calendar-tile pieces for a date, e.g. { weekday: 'TUE', day: 17, month: 'NOV' }.
+export function dateTile(ms: number) {
+  const d = houston(ms);
+  return {
+    weekday: DAYS[d.getUTCDay()].toUpperCase(),
+    day: d.getUTCDate(),
+    month: MONTHS[d.getUTCMonth()].toUpperCase(),
+  };
+}

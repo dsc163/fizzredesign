@@ -1,23 +1,19 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { api, Listing } from '@/api/client';
 import { EmptyState } from '@/components/EmptyState';
-import { EventCard } from '@/components/EventCard';
 import { PostCard } from '@/components/PostCard';
 import { Screen } from '@/components/Screen';
-import { Chip, ErrorText, Loading } from '@/components/ui';
+import { Button, Chip, ErrorText, Loading } from '@/components/ui';
 import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
-import { houstonDayStart } from '@/lib/format';
 
 const SECTIONS = [
   { key: 'all', label: 'All' },
   { key: 'services', label: 'Services' },
   { key: 'goods', label: 'Goods' },
-  { key: 'events', label: 'Events' },
   { key: 'wanted', label: 'Wanted' },
   { key: 'lostfound', label: 'Lost & Found' },
 ];
@@ -27,55 +23,8 @@ const CATEGORIES: Record<string, string[]> = {
   goods: ['Textbooks', 'Electronics', 'Dorm', 'Furniture', 'Clothing', 'Bikes', 'Tickets', 'Other'],
 };
 
-const EVENT_TAGS = ['Parties', 'Sports', 'Clubs', 'Performances', 'Food', 'Study', 'Pop-ups'];
-
-type Row = { kind: 'header'; title: string } | { kind: 'post'; listing: Listing };
-
-// Events read best by date: Today, Tomorrow, This week, Later.
-function eventRows(listings: Listing[]): Row[] {
-  const today = houstonDayStart(Date.now());
-  const groups: Record<string, Listing[]> = { Today: [], Tomorrow: [], 'This week': [], Later: [] };
-  for (const l of listings) {
-    const days = Math.round((houstonDayStart(l.details.starts_at ?? 0) - today) / 86400000);
-    const key = days <= 0 ? 'Today' : days === 1 ? 'Tomorrow' : days < 7 ? 'This week' : 'Later';
-    groups[key].push(l);
-  }
-  return Object.entries(groups).flatMap(([title, items]) =>
-    items.length ? [{ kind: 'header' as const, title }, ...items.map((listing) => ({ kind: 'post' as const, listing }))] : []
-  );
-}
-
-const TIP_KEY = 'fizz.browseTipDismissed';
-
-// A one-time pointer to the main task for first-time visitors.
-function StartTip() {
-  const router = useRouter();
-  const [show, setShow] = useState(false);
-  useEffect(() => {
-    AsyncStorage.getItem(TIP_KEY)
-      .then((v) => setShow(v !== '1'))
-      .catch(() => setShow(true));
-  }, []);
-  if (!show) return null;
-  const dismiss = () => {
-    setShow(false);
-    AsyncStorage.setItem(TIP_KEY, '1').catch(() => undefined);
-  };
-  return (
-    <View style={styles.tip}>
-      <View style={styles.tipText}>
-        <Text style={styles.tipTitle}>New here? Try booking a service</Text>
-        <Text style={styles.tipBody}>Open a service like a haircut or tutoring, pick a time, and tap Book. The seller replies in Messages.</Text>
-        <Text style={styles.tipLink} onPress={() => { dismiss(); router.push('/listing/l_gavin_cuts'); }}>
-          Show me Fresh Cuts by Gavin →
-        </Text>
-      </View>
-      <Ionicons name="close" size={18} color={Colors.textSecondary} onPress={dismiss} accessibilityLabel="Dismiss tip" />
-    </View>
-  );
-}
-
 export default function BrowseScreen() {
+  const router = useRouter();
   const [section, setSection] = useState('all');
   const [category, setCategory] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -87,7 +36,7 @@ export default function BrowseScreen() {
   const load = useCallback(async () => {
     const id = ++requestId.current;
     try {
-      const result = await api.listings({ section, category: section === 'events' ? null : category, q: query.trim() });
+      const result = await api.listings({ section, category, q: query.trim() });
       if (id === requestId.current) {
         setListings(result.listings);
         setError(null);
@@ -116,13 +65,7 @@ export default function BrowseScreen() {
   }
 
   const categories = CATEGORIES[section];
-  const isEvents = section === 'events';
-  const visible = (listings ?? []).filter(
-    (l) => !isEvents || !category || (l.details.tags ?? []).includes(category)
-  );
-  const rows: Row[] = isEvents ? eventRows(visible) : visible.map((listing) => ({ kind: 'post', listing }));
-  const replace = (updated: Listing) =>
-    setListings((all) => all?.map((l) => (l.id === updated.id ? updated : l)) ?? null);
+  const filtered = Boolean(query || category || section !== 'all');
 
   return (
     <Screen>
@@ -132,7 +75,7 @@ export default function BrowseScreen() {
           <TextInput
             value={query}
             onChangeText={setQuery}
-            placeholder="Search goods, services, events…"
+            placeholder="Search goods, services, and more…"
             placeholderTextColor={Colors.textMuted}
             style={styles.searchInput}
             returnKeyType="search"
@@ -155,10 +98,10 @@ export default function BrowseScreen() {
             />
           ))}
         </ScrollView>
-        {(categories || isEvents) && (
+        {categories && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-            <Chip label={isEvents ? 'All events' : 'All categories'} selected={!category} onPress={() => setCategory(null)} />
-            {(isEvents ? EVENT_TAGS : categories).map((c) => (
+            <Chip label="All categories" selected={!category} onPress={() => setCategory(null)} />
+            {categories.map((c) => (
               <Chip key={c} label={c} selected={category === c} onPress={() => setCategory(c)} />
             ))}
           </ScrollView>
@@ -169,32 +112,29 @@ export default function BrowseScreen() {
         <Loading />
       ) : (
         <FlatList
-          data={rows}
-          keyExtractor={(row) => (row.kind === 'header' ? `h-${row.title}` : row.listing.id)}
-          renderItem={({ item }) =>
-            item.kind === 'header' ? (
-              <Text style={styles.groupHeader}>{item.title}</Text>
-            ) : item.listing.type === 'event' ? (
-              <EventCard listing={item.listing} onChange={replace} />
-            ) : (
-              <PostCard listing={item.listing} />
-            )
-          }
+          data={listings ?? []}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => <PostCard listing={item} />}
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
-          ListHeaderComponent={
-            <>
-              {section === 'all' && !query && <StartTip />}
-              <ErrorText message={error} />
-            </>
-          }
+          ListHeaderComponent={<ErrorText message={error} />}
           ListEmptyComponent={
-            error ? undefined : (
+            error ? undefined : filtered ? (
               <EmptyState
                 icon="search-outline"
                 title={query ? `No results for "${query.trim()}"` : 'Nothing here yet'}
-                message={query ? 'Try a different word or another section.' : 'New posts will show up here.'}
+                message={query ? 'Try a different word or another section.' : 'Be the first to post in this section.'}
               />
+            ) : (
+              <View style={styles.empty}>
+                <EmptyState
+                  icon="storefront-outline"
+                  title="The marketplace is just getting started"
+                  message="Sell something you no longer need, or offer a service like haircuts or tutoring. Your post shows up here for every Rice student."
+                />
+                <Button title="Post something" icon="add" onPress={() => router.push('/post')} />
+                <Text style={styles.emptyHint}>Looking for something to do? Check the Events tab.</Text>
+              </View>
             )
           }
         />
@@ -223,17 +163,6 @@ const styles = StyleSheet.create({
   searchInput: { ...Typography.body, flex: 1, color: Colors.text, paddingVertical: Spacing.md },
   chips: { gap: Spacing.sm, paddingHorizontal: Spacing.lg },
   list: { padding: Spacing.lg, gap: Spacing.md, flexGrow: 1 },
-  tip: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    padding: Spacing.md,
-    borderRadius: Radius.lg,
-    backgroundColor: Colors.primarySoft,
-    marginBottom: Spacing.xs,
-  },
-  tipText: { flex: 1, gap: 4 },
-  tipTitle: { ...Typography.heading, fontSize: 15, color: Colors.text },
-  tipBody: { ...Typography.caption, color: Colors.textSecondary },
-  tipLink: { ...Typography.caption, fontWeight: '700', color: Colors.primary },
-  groupHeader: { ...Typography.heading, color: Colors.text, marginTop: Spacing.xs },
+  empty: { flex: 1, gap: Spacing.lg, paddingBottom: Spacing.xxl },
+  emptyHint: { ...Typography.caption, color: Colors.textSecondary, textAlign: 'center' },
 });

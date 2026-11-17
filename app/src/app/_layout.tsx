@@ -1,24 +1,31 @@
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack, useGlobalSearchParams, usePathname, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 
 import { AuthProvider, useAuth } from '@/auth/AuthProvider';
 import { Loading } from '@/components/ui';
+import { BadgeProvider } from '@/lib/badges';
 import { Colors, MaxAppWidth, Typography } from '@/constants/theme';
 
-// Sends signed-out people to the welcome screen and signed-in people away from it.
+// Sends signed-out people to the welcome screen and signed-in people away from
+// it, back to the page they were trying to open (e.g. a shared post link).
 function AuthGate() {
   const { user, ready } = useAuth();
   const segments = useSegments();
+  const pathname = usePathname();
+  const { next } = useGlobalSearchParams<{ next?: string }>();
   const router = useRouter();
   const onWelcome = segments[0] === 'welcome';
 
   useEffect(() => {
     if (!ready) return;
-    if (!user && !onWelcome) router.replace('/welcome');
-    else if (user && onWelcome) router.replace('/');
-  }, [ready, user, onWelcome, router]);
+    if (!user && !onWelcome) {
+      router.replace(pathname && pathname !== '/' ? { pathname: '/welcome', params: { next: pathname } } : '/welcome');
+    } else if (user && onWelcome) {
+      router.replace(typeof next === 'string' && next.startsWith('/') && !next.startsWith('//') ? (next as never) : '/');
+    }
+  }, [ready, user, onWelcome, router, pathname, next]);
 
   if (!ready) return <Loading />;
 
@@ -37,6 +44,7 @@ function AuthGate() {
       <Stack.Screen name="thread/[id]" options={{ title: 'Conversation' }} />
       <Stack.Screen name="profile/edit" options={{ title: 'Edit profile' }} />
       <Stack.Screen name="report" options={{ title: 'Report or block', presentation: 'modal' }} />
+      <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
     </Stack>
   );
 }
@@ -47,7 +55,9 @@ export default function RootLayout() {
       <View style={styles.app}>
         <StatusBar style="dark" />
         <AuthProvider>
-          <AuthGate />
+          <BadgeProvider>
+            <AuthGate />
+          </BadgeProvider>
         </AuthProvider>
       </View>
     </View>

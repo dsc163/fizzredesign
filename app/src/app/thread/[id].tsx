@@ -20,6 +20,7 @@ import { TimePicker } from '@/components/TimePicker';
 import { Avatar, Button, Card, Chip, ErrorText, Label, Loading, PostThumb, VerifiedBadge } from '@/components/ui';
 import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
 import { formatDateTime, formatPrice, formatTime } from '@/lib/format';
+import { useBadges } from '@/lib/badges';
 import { usePolling } from '@/lib/usePolling';
 
 const MEETUP_SPOTS = ['Fondren Library entrance', 'RMC', 'College commons'];
@@ -35,15 +36,17 @@ export default function ThreadScreen() {
   const [draft, setDraft] = useState('');
   const scrollRef = useRef<ScrollViewInstance>(null);
 
+  const { refresh } = useBadges();
   const load = useCallback(async () => {
     try {
       const result = await api.thread(id);
       setThread(result.thread);
       setError(null);
+      if (result.thread.unread > 0) refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load this conversation.');
     }
-  }, [id]);
+  }, [id, refresh]);
 
   usePolling(load, 3000);
 
@@ -224,7 +227,7 @@ function StatusPanel({ thread, busy, act }: { thread: Thread; busy: boolean; act
           )}
           {theirTurn ? (
             <Text style={styles.body}>
-              {isBuyer ? `Sent. ${otherFirst === 'Verified' ? 'The seller' : otherFirst} usually replies quickly.` : 'Waiting for the buyer to confirm the new time.'}
+              {isBuyer ? "Sent. You'll get a notification when they respond." : 'Waiting for the buyer to confirm the new time.'}
             </Text>
           ) : suggesting ? (
             <>

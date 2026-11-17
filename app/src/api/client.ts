@@ -25,6 +25,8 @@ export function resolveUrl(path: string | null | undefined) {
 
 // ---------- types ----------
 
+export type Prefs = { remindDay: boolean; remindHour: boolean };
+
 export type User = {
   id: string;
   email: string;
@@ -33,6 +35,8 @@ export type User = {
   bio: string | null;
   photo: string | null;
   venmo: string | null;
+  interests: string[] | null;
+  prefs: Prefs;
 };
 
 export type PostType = 'item' | 'service' | 'event' | 'wanted' | 'lost' | 'found';
@@ -58,7 +62,28 @@ export type EventDetails = {
   tags?: string[];
   rsvps?: number;
   my_going?: boolean;
-  my_saved?: boolean;
+  named_rsvps?: boolean;
+};
+
+export type Stats = { likes: number; liked: boolean; saved: boolean; comments: number };
+
+export type Comment = {
+  id: string;
+  body: string;
+  photo: string | null;
+  createdAt: number;
+  mine: boolean;
+  author: string;
+};
+
+export type Notification = {
+  id: string;
+  kind: string;
+  title: string;
+  body: string;
+  link: string | null;
+  read: boolean;
+  createdAt: number;
 };
 
 export type EventUpdate = { id: string; body: string; createdAt: number };
@@ -78,6 +103,7 @@ export type Listing = {
   createdAt: number;
   isMine: boolean;
   author: Author;
+  stats: Stats;
 };
 
 export type ThreadStatus = 'open' | 'requested' | 'accepted' | 'declined' | 'completed';
@@ -118,6 +144,8 @@ export type ListingResponse = {
   listing: Listing;
   myThread: { id: string; status: ThreadStatus } | null;
   updates: EventUpdate[];
+  comments: Comment[];
+  attendees: { name: string; photo: string | null }[] | null;
 };
 
 // ---------- transport ----------
@@ -185,7 +213,12 @@ export const api = {
     request<{ token: string; user: User }>('POST', '/auth/login', input),
   logout: () => request<{ ok: true }>('POST', '/auth/logout'),
   me: () => request<{ user: User }>('GET', '/me'),
-  updateMe: (input: Partial<Omit<User, 'id' | 'email'>>) => request<{ user: User }>('PATCH', '/me', input),
+  updateMe: (input: Partial<Omit<User, 'id' | 'email' | 'prefs'>> & { prefs?: Partial<Prefs> }) =>
+    request<{ user: User }>('PATCH', '/me', input),
+  badges: () => request<{ notifications: number; messages: number }>('GET', '/me/badges'),
+  saved: () => request<{ listings: Listing[] }>('GET', '/me/saved'),
+  notifications: () => request<{ notifications: Notification[] }>('GET', '/notifications'),
+  markNotificationsRead: () => request<{ ok: true }>('POST', '/notifications/read'),
   myListings: () => request<{ listings: Listing[] }>('GET', '/me/listings'),
 
   uploadImage: (data: string, mime: string) => request<{ url: string }>('POST', '/images', { data, mime }),
@@ -198,8 +231,13 @@ export const api = {
     return request<{ listings: Listing[] }>('GET', `/listings?${query}`);
   },
   listing: (id: string) => request<ListingResponse>('GET', `/listings/${id}`),
-  rsvp: (id: string, input: { going?: boolean; saved?: boolean }) =>
-    request<ListingResponse>('POST', `/listings/${id}/rsvp`, input),
+  rsvp: (id: string, going: boolean) => request<ListingResponse>('POST', `/listings/${id}/rsvp`, { going }),
+  like: (id: string, liked: boolean) => request<ListingResponse>('POST', `/listings/${id}/like`, { liked }),
+  save: (id: string, saved: boolean) => request<ListingResponse>('POST', `/listings/${id}/save`, { saved }),
+  comment: (id: string, body: string, photo?: string | null) =>
+    request<ListingResponse>('POST', `/listings/${id}/comments`, { body, photo }),
+  deleteComment: (id: string, commentId: string) =>
+    request<ListingResponse>('DELETE', `/listings/${id}/comments/${commentId}`),
   postUpdate: (id: string, body: string) => request<ListingResponse>('POST', `/listings/${id}/updates`, { body }),
   myEvents: () => request<{ listings: Listing[] }>('GET', '/me/events'),
   createListing: (input: Record<string, unknown>) => request<{ listing: Listing }>('POST', '/listings', input),

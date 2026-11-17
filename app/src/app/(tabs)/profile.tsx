@@ -4,7 +4,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { api, Listing } from '@/api/client';
 import { useAuth } from '@/auth/AuthProvider';
-import { EventCard } from '@/components/EventCard';
+import { PartyEventCard } from '@/components/PartyEventCard';
 import { PostCard } from '@/components/PostCard';
 import { Screen } from '@/components/Screen';
 import { Avatar, Button, Card, Label, VerifiedBadge } from '@/components/ui';
@@ -15,11 +15,13 @@ export default function ProfileScreen() {
   const router = useRouter();
   const [listings, setListings] = useState<Listing[]>([]);
   const [events, setEvents] = useState<Listing[]>([]);
+  const [saved, setSaved] = useState<Listing[]>([]);
 
   useFocusEffect(
     useCallback(() => {
       api.myListings().then((r) => setListings(r.listings)).catch(() => undefined);
       api.myEvents().then((r) => setEvents(r.listings)).catch(() => undefined);
+      api.saved().then((r) => setSaved(r.listings)).catch(() => undefined);
     }, [])
   );
 
@@ -59,11 +61,20 @@ export default function ProfileScreen() {
         )}
         <Button variant="secondary" title="Edit profile" icon="create-outline" onPress={() => router.push('/profile/edit')} />
 
-        <Text style={styles.section}>My events</Text>
+        <Text style={styles.section}>Events I'm going to</Text>
         {events.length === 0 ? (
-          <Text style={styles.body}>Events you RSVP to or save show up here.</Text>
+          <Text style={styles.body}>RSVP to an event in the Events tab and it shows up here.</Text>
         ) : (
-          events.map((e) => <EventCard key={e.id} listing={e} onChange={(u) => setEvents((all) => all.map((x) => (x.id === u.id ? u : x)))} />)
+          events.map((e) => (
+            <PartyEventCard key={e.id} listing={e} onChange={(u) => setEvents((all) => all.map((x) => (x.id === u.id ? u : x)))} />
+          ))
+        )}
+
+        <Text style={styles.section}>Saved</Text>
+        {saved.length === 0 ? (
+          <Text style={styles.body}>Tap Save on any post or event to come back to it later.</Text>
+        ) : (
+          saved.map((l) => (l.type === 'event' ? <PartyEventCard key={l.id} listing={l} /> : <PostCard key={l.id} listing={l} />))
         )}
 
         <Text style={styles.section}>My posts</Text>
@@ -72,7 +83,7 @@ export default function ProfileScreen() {
         ) : (
           listings.map((l) => (
             <View key={l.id} style={styles.listing}>
-              {l.type === 'event' ? <EventCard listing={l} /> : <PostCard listing={l} />}
+              {l.type === 'event' ? <PartyEventCard listing={l} /> : <PostCard listing={l} />}
               {l.status !== 'active' && (
                 <Text style={styles.statusTag}>{l.status === 'sold' ? 'Sold' : 'Paused'} · hidden from Browse</Text>
               )}
