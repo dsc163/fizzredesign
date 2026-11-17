@@ -12,13 +12,6 @@ import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
 import { formatAgo } from '@/lib/format';
 import { usePolling } from '@/lib/usePolling';
 
-const STATUS: Record<Thread['status'], { label: string; fg: string; bg: string }> = {
-  open: { label: 'Chatting', fg: Colors.textSecondary, bg: Colors.surface },
-  requested: { label: 'Request pending', fg: Colors.warning, bg: Colors.warningSoft },
-  accepted: { label: 'Accepted', fg: Colors.primary, bg: Colors.primarySoft },
-  declined: { label: 'Declined', fg: Colors.danger, bg: Colors.dangerSoft },
-  completed: { label: 'Complete', fg: Colors.success, bg: Colors.successSoft },
-};
 
 function MessagesScreenContent() {
   const [threads, setThreads] = useState<Thread[] | null>(null);
@@ -58,7 +51,6 @@ function MessagesScreenContent() {
 }
 
 function ThreadRow({ thread }: { thread: Thread }) {
-  const status = STATUS[thread.status];
   const other = thread.counterpart;
   const preview = thread.lastMessage
     ? `${thread.lastMessage.mine ? 'You: ' : ''}${thread.lastMessage.body}`
@@ -82,15 +74,13 @@ function ThreadRow({ thread }: { thread: Thread }) {
             {thread.lastMessage && <Text style={styles.time}>{formatAgo(thread.lastMessage.createdAt)}</Text>}
           </View>
           <Text style={styles.meta} numberOfLines={1}>
-            {thread.role === 'buyer' ? 'Seller' : 'Buyer'}: {other.name}
+            {thread.role === 'buyer' ? 'Posted by' : 'From'}: {other.name}
           </Text>
           <Text style={[styles.preview, thread.unread > 0 && styles.unreadText]} numberOfLines={1}>
             {preview}
           </Text>
           <View style={styles.bottomLine}>
-            <View style={[styles.status, { backgroundColor: status.bg }]}>
-              <Text style={[styles.statusText, { color: status.fg }]}>{status.label}</Text>
-            </View>
+            <Text style={styles.meta}>{other.revealed ? 'Contact shared' : 'Anonymous until you share contact'}</Text>
             {thread.unread > 0 && (
               <View style={styles.unread}>
                 <Text style={styles.unreadCount}>{thread.unread}</Text>

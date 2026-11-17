@@ -138,6 +138,7 @@ export type Thread = {
   completedAt: number | null;
   updatedAt: number;
   counterpart: Counterpart;
+  iShared: boolean;
   unread: number;
   lastMessage: { body: string; system: boolean; mine: boolean; createdAt: number } | null;
   messages?: Message[];
@@ -244,12 +245,14 @@ export const api = {
   postUpdate: (id: string, body: string) => request<ListingResponse>('POST', `/listings/${id}/updates`, { body }),
   myEvents: () => request<{ listings: Listing[] }>('GET', '/me/events'),
   createListing: (input: Record<string, unknown>) => request<{ listing: Listing }>('POST', '/listings', input),
+  removeListing: (id: string) => request<{ ok: true }>('DELETE', `/listings/${id}`),
   setListingStatus: (id: string, status: Listing['status']) =>
     request<{ listing: Listing }>('PATCH', `/listings/${id}`, { status }),
 
   threads: () => request<{ threads: Thread[] }>('GET', '/threads'),
   startThread: (listingId: string) => request<{ thread: { id: string } }>('POST', '/threads', { listingId }),
   thread: (id: string) => request<{ thread: Thread }>('GET', `/threads/${id}`),
+  shareContact: (id: string) => request<{ thread: Thread }>('POST', `/threads/${id}/share`),
   sendMessage: (id: string, body: string) => request<{ thread: Thread }>('POST', `/threads/${id}/messages`, { body }),
   requestThread: (id: string, input: { proposedTime: number | null; optionLabel?: string | null; note?: string }) =>
     request<{ thread: Thread }>('POST', `/threads/${id}/request`, input),

@@ -19,16 +19,14 @@ import { useAuth } from '@/auth/AuthProvider';
 import { EmptyState } from '@/components/EmptyState';
 import { Screen } from '@/components/Screen';
 import { SignInPrompt } from '@/components/SignInPrompt';
-import { TimePicker } from '@/components/TimePicker';
 import { Avatar, Button, Card, Chip, ErrorText, Label, Loading, PostThumb, VerifiedBadge } from '@/components/ui';
 import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
-import { formatDateTime, formatPrice, formatTime } from '@/lib/format';
+import { formatPrice, formatTime } from '@/lib/format';
 import { useBadges } from '@/lib/badges';
 import { paymentEntries } from '@/lib/payments';
 import { usePolling } from '@/lib/usePolling';
 
-const MEETUP_SPOTS = ['Fondren Library entrance', 'RMC', 'College commons'];
-const TEMPLATES = ['Is this still available?', 'Are you free this week?', 'On my way!', 'Running 5 minutes late'];
+const TEMPLATES = ['Is this still available?', 'When works for you?', 'Can we meet at the RMC?', 'On my way!'];
 
 function ThreadScreenContent() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -54,11 +52,11 @@ function ThreadScreenContent() {
 
   usePolling(load, 3000);
 
-  // When the exchange moves to a new step, bring the status card into view.
-  const status = thread?.status;
+  // Keep the newest message in view as the conversation grows.
+  const count = thread?.messages?.length ?? 0;
   useEffect(() => {
-    if (status) scrollRef.current?.scrollTo({ y: 0, animated: true });
-  }, [status]);
+    if (count) setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
+  }, [count]);
 
   // Run an action that returns the updated conversation.
   async function act(fn: () => Promise<{ thread: Thread }>) {
@@ -109,15 +107,14 @@ function ThreadScreenContent() {
                 {thread.listing.title}
               </Text>
               <Text style={styles.meta}>
-                {thread.role === 'buyer' ? 'You are the buyer' : 'You are the seller'}
-                {thread.optionLabel && thread.optionLabel !== thread.listing.title ? ` · ${thread.optionLabel}` : ''}
-                {thread.price !== null ? ` · ${formatPrice(thread.price)}` : ''}
+                {thread.role === 'buyer' ? 'You asked about this post' : 'Someone is asking about your post'}
+                {thread.listing.price !== null ? ` · ${formatPrice(thread.listing.price)}` : ''}
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
           </Pressable>
 
-          <StatusPanel thread={thread} busy={busy} act={act} />
+          <ContactPanel thread={thread} busy={busy} act={act} />
           <ErrorText message={actionError} />
 
           <View style={styles.messages}>
@@ -176,236 +173,64 @@ function ThreadScreenContent() {
 
 type ActFn = (fn: () => Promise<{ thread: Thread }>) => Promise<void>;
 
-function StatusPanel({ thread, busy, act }: { thread: Thread; busy: boolean; act: ActFn }) {
-  const router = useRouter();
-  const [suggesting, setSuggesting] = useState(false);
-  const [suggestTime, setSuggestTime] = useState<number | null>(null);
-  const isBuyer = thread.role === 'buyer';
-  const otherFirst = thread.counterpart.name.split(' ')[0];
-  const theirTurn = thread.proposedBy === thread.role;
-  const verb = thread.listing.type === 'service' ? 'booking' : 'request';
-
-  switch (thread.status) {
-    case 'open':
-      return isBuyer ? (
-        <Card>
-          <Text style={styles.cardTitle}>Ready when you are</Text>
-          <Text style={styles.body}>Pick a time on the listing to send a {verb}.</Text>
-          <Button title="Pick a time" icon="calendar-outline" onPress={() => router.push(`/listing/${thread.listing.id}`)} />
-        </Card>
-      ) : (
-        <Card>
-          <Text style={styles.cardTitle}>A buyer is asking about your listing</Text>
-          <Text style={styles.body}>Reply below. You'll see their request here when they pick a time.</Text>
-        </Card>
-      );
-
-    case 'declined':
-      return (
-        <Card>
-          <Text style={styles.cardTitle}>Request declined</Text>
-          {isBuyer ? (
-            <>
-              <Text style={styles.body}>Try another time that might work better.</Text>
-              <Button title="Pick another time" onPress={() => router.push(`/listing/${thread.listing.id}`)} />
-            </>
-          ) : (
-            <Text style={styles.body}>The buyer can send a new request with a different time.</Text>
-          )}
-        </Card>
-      );
-
-    case 'requested':
-      return (
-        <Card style={styles.highlight}>
-          <Label>{theirTurn ? 'WAITING FOR A RESPONSE' : isBuyer ? 'NEW TIME SUGGESTED' : 'NEW REQUEST'}</Label>
-          <Text style={styles.cardTitle}>
-            {thread.optionLabel ?? thread.listing.title}
-            {thread.price !== null ? ` · ${formatPrice(thread.price)}` : ''}
-          </Text>
-          {thread.proposedTime ? (
-            <View style={styles.inline}>
-              <Ionicons name="time-outline" size={18} color={Colors.textSecondary} />
-              <Text style={styles.body}>{formatDateTime(thread.proposedTime)}</Text>
-            </View>
-          ) : (
-            <Text style={styles.body}>No time picked yet. Agree on one in the chat below.</Text>
-          )}
-          {theirTurn ? (
-            <Text style={styles.body}>
-              {isBuyer ? "Sent. You'll get a notification when they respond." : 'Waiting for the buyer to confirm the new time.'}
-            </Text>
-          ) : suggesting ? (
-            <>
-              <TimePicker dayLabel="SUGGEST A DAY" onChange={setSuggestTime} />
-              <Button
-                title="Send new time"
-                disabled={!suggestTime}
-                loading={busy}
-                onPress={() => act(() => api.respond(thread.id, 'suggest', suggestTime!)).then(() => setSuggesting(false))}
-              />
-              <Button variant="ghost" title="Cancel" onPress={() => setSuggesting(false)} />
-            </>
-          ) : (
-            <>
-              <Button title="Accept" icon="checkmark" loading={busy} onPress={() => act(() => api.respond(thread.id, 'accept'))} />
-              <View style={styles.inline}>
-                <Button style={styles.flex} variant="secondary" title="Suggest a time" onPress={() => setSuggesting(true)} />
-                <Button style={styles.flex} variant="danger" title="Decline" onPress={() => act(() => api.respond(thread.id, 'decline'))} />
-              </View>
-            </>
-          )}
-          {theirTurn && (
-            <Text style={styles.finePrint}>Names are shared with both of you once the {verb} is accepted.</Text>
-          )}
-        </Card>
-      );
-
-    case 'accepted':
-    case 'completed':
-      return <AcceptedPanel thread={thread} busy={busy} act={act} />;
-  }
-}
-
-function AcceptedPanel({ thread, busy, act }: { thread: Thread; busy: boolean; act: ActFn }) {
-  const [customSpot, setCustomSpot] = useState('');
-  const [showCustom, setShowCustom] = useState(false);
+// Everything is arranged in the chat. Either person can choose to share their
+// name and payment apps; until then both stay anonymous (service providers are public).
+function ContactPanel({ thread, busy, act }: { thread: Thread; busy: boolean; act: ActFn }) {
   const other = thread.counterpart;
-  const isBuyer = thread.role === 'buyer';
-  const done = thread.status === 'completed';
-
+  const pay = paymentEntries(other.payments);
   return (
     <View style={styles.panels}>
-      {done && (
-        <Card style={styles.success}>
-          <Ionicons name="checkmark-circle" size={36} color={Colors.success} />
-          <Text style={styles.successTitle}>Exchange complete</Text>
-          <Text style={styles.body}>
-            {isBuyer ? `You ${thread.listing.type === 'service' ? 'booked' : 'bought'}` : 'You sold'} {thread.optionLabel ?? thread.listing.title}
-            {thread.price !== null ? ` for ${formatPrice(thread.price)}` : ''}. Thanks for trading on Fizz!
-          </Text>
+      {(other.revealed || other.college || other.photo) && (
+        <Card>
+          <Label>{thread.role === 'buyer' ? 'POSTED BY' : 'ASKING'}</Label>
+          <View style={styles.person}>
+            <Avatar name={other.name} photo={other.photo} size={44} />
+            <View style={styles.flex}>
+              <View style={styles.inline}>
+                <Text style={styles.cardTitle}>{other.name}</Text>
+                <VerifiedBadge />
+              </View>
+              {other.college && <Text style={styles.meta}>{other.college}</Text>}
+            </View>
+          </View>
+          {pay.length > 0 && (
+            <View style={styles.pay}>
+              <Label>PAY WITH</Label>
+              {pay.map((p) => (
+                <Pressable
+                  key={p.key}
+                  style={styles.payRow}
+                  disabled={!p.url}
+                  onPress={() => p.url && Linking.openURL(p.url)}
+                  accessibilityRole={p.url ? 'link' : 'text'}>
+                  <Text style={styles.body}>{p.label}</Text>
+                  <View style={styles.inline}>
+                    <Text style={styles.cardTitle}>{p.handle}</Text>
+                    {p.url && <Ionicons name="open-outline" size={16} color={Colors.primary} />}
+                  </View>
+                </Pressable>
+              ))}
+            </View>
+          )}
         </Card>
       )}
-
-      <Card>
-        <Label>YOU'RE MEETING</Label>
-        <View style={styles.person}>
-          <Avatar name={other.name} photo={other.photo} size={48} />
-          <View style={styles.flex}>
-            <View style={styles.inline}>
-              <Text style={styles.cardTitle}>{other.name}</Text>
-              <VerifiedBadge />
-            </View>
-            <Text style={styles.meta}>
-              {isBuyer ? 'Seller' : 'Buyer'}
-              {other.college ? ` · ${other.college}` : ''}
-            </Text>
-          </View>
-        </View>
-        <Text style={styles.finePrint}>
-          {other.name.split(' ')[0]} can also see your name and photo. Names are shared only after a request is accepted.
-        </Text>
-      </Card>
-
-      <Card>
-        <Label>WHEN AND WHERE</Label>
-        {thread.proposedTime ? (
-          <View style={styles.inline}>
-            <Ionicons name="time-outline" size={18} color={Colors.textSecondary} />
-            <Text style={styles.body}>{formatDateTime(thread.proposedTime)}</Text>
-          </View>
-        ) : (
-          <Text style={styles.body}>Time: agree on one in the chat.</Text>
-        )}
-        {thread.meetupSpot && (
-          <View style={styles.inline}>
-            <Ionicons name="location-outline" size={18} color={Colors.textSecondary} />
-            <Text style={styles.body}>{thread.meetupSpot}</Text>
-          </View>
-        )}
-        {!done && (
-          <>
-            <Text style={styles.meta}>{thread.meetupSpot ? 'Change the meetup spot:' : 'Pick a public spot to meet:'}</Text>
-            <View style={styles.wrap}>
-              {MEETUP_SPOTS.map((spot) => (
-                <Chip
-                  key={spot}
-                  label={spot}
-                  selected={thread.meetupSpot === spot}
-                  onPress={() => act(() => api.setMeetup(thread.id, spot))}
-                />
-              ))}
-              <Chip label="Other" selected={showCustom} onPress={() => setShowCustom(!showCustom)} />
-            </View>
-            {showCustom && (
-              <View style={styles.inline}>
-                <TextInput
-                  value={customSpot}
-                  onChangeText={setCustomSpot}
-                  placeholder="e.g. Baker commons"
-                  placeholderTextColor={Colors.textMuted}
-                  style={[styles.input, styles.flex]}
-                />
-                <Button
-                  title="Set"
-                  disabled={!customSpot.trim()}
-                  onPress={() => act(() => api.setMeetup(thread.id, customSpot.trim())).then(() => setShowCustom(false))}
-                />
-              </View>
-            )}
-          </>
-        )}
-      </Card>
-
-      <Card>
-        <Label>{isBuyer ? 'PAY IN PERSON' : "BUYER'S PAYMENT APPS"}</Label>
-        {paymentEntries(other.payments).length > 0 ? (
-          paymentEntries(other.payments).map((p) => (
-            <Pressable
-              key={p.key}
-              style={styles.payRow}
-              disabled={!p.url}
-              onPress={() => p.url && Linking.openURL(p.url)}
-              accessibilityRole={p.url ? 'link' : 'text'}>
-              <Text style={styles.body}>{p.label}</Text>
-              <View style={styles.inline}>
-                <Text style={styles.cardTitle}>{p.handle}</Text>
-                {p.url && <Ionicons name="open-outline" size={16} color={Colors.primary} />}
-              </View>
-            </Pressable>
-          ))
-        ) : (
+      {thread.iShared ? (
+        <Text style={styles.finePrint}>You shared your name and payment info in this chat.</Text>
+      ) : (
+        <Card style={styles.shareCard}>
           <Text style={styles.body}>
-            {isBuyer
-              ? "The seller hasn't added a payment app. Pay with cash or ask in the chat."
-              : 'Collect payment in person.'}
+            Ready to meet up? Share your name and payment apps with {other.revealed ? other.name.split(' ')[0] : 'them'}.
+            You stay anonymous until you do.
           </Text>
-        )}
-      </Card>
-
-      <Card>
-        <Label>CLOSE IT OUT</Label>
-        <Step done={thread.buyerPaid} text={thread.buyerPaid ? 'Buyer marked paid' : 'Buyer marks paid'} />
-        <Step done={thread.sellerComplete} text={thread.sellerComplete ? 'Seller marked complete' : 'Seller marks complete'} />
-        {!done && isBuyer && !thread.buyerPaid && (
-          <Button title="I paid" icon="cash-outline" loading={busy} onPress={() => act(() => api.markPaid(thread.id))} />
-        )}
-        {!done && !isBuyer && !thread.sellerComplete && (
-          <Button title="Mark complete" icon="checkmark-done" loading={busy} onPress={() => act(() => api.markComplete(thread.id))} />
-        )}
-        {!done && ((isBuyer && thread.buyerPaid) || (!isBuyer && thread.sellerComplete)) && (
-          <Text style={styles.finePrint}>Waiting for {other.name.split(' ')[0]} to confirm.</Text>
-        )}
-      </Card>
-    </View>
-  );
-}
-
-function Step({ done, text }: { done: boolean; text: string }) {
-  return (
-    <View style={styles.inline}>
-      <Ionicons name={done ? 'checkmark-circle' : 'ellipse-outline'} size={20} color={done ? Colors.success : Colors.textMuted} />
-      <Text style={[styles.body, done && { color: Colors.text }]}>{text}</Text>
+          <Button
+            variant="secondary"
+            icon="person-add-outline"
+            title="Share my name & payment info"
+            loading={busy}
+            onPress={() => act(() => api.shareContact(thread.id))}
+          />
+        </Card>
+      )}
     </View>
   );
 }
@@ -430,6 +255,8 @@ const styles = StyleSheet.create({
   inline: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
   panels: { gap: Spacing.md },
+  pay: { gap: Spacing.sm, marginTop: Spacing.xs },
+  shareCard: { backgroundColor: Colors.surface, borderColor: Colors.surface },
   person: { flexDirection: 'row', gap: Spacing.md, alignItems: 'center' },
   payRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   success: { alignItems: 'center', backgroundColor: Colors.successSoft, borderColor: Colors.successSoft },

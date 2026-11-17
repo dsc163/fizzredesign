@@ -1,18 +1,18 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { api, Listing, ListingResponse } from '@/api/client';
 import { EmptyState } from '@/components/EmptyState';
 import { EventDetail } from '@/components/EventDetail';
 import { Screen } from '@/components/Screen';
 import { Comments, SocialBar } from '@/components/social';
-import { TimePicker } from '@/components/TimePicker';
 import { Avatar, Button, Card, Chip, ErrorText, Label, Loading, PostThumb, TypeLabel, VerifiedBadge } from '@/components/ui';
 import { Colors, Party, Radius, Spacing, Typography } from '@/constants/theme';
 import { formatDateTime, formatPrice } from '@/lib/format';
 import { useRequireSignIn } from '@/lib/requireSignIn';
+import { takeDown } from '@/lib/takeDown';
 
 const QUICK_MESSAGES = ['Is this still available?', 'Are you free this week?'];
 
@@ -105,19 +105,8 @@ export default function ListingScreen() {
 
         {listing.isMine ? (
           <OwnerPanel listing={listing} onChange={setListing} />
-        ) : listing.type === 'item' || listing.type === 'service' ? (
-          listing.status === 'active' ? (
-            myThread && myThread.status !== 'declined' ? (
-              <Card>
-                <Text style={styles.cardTitle}>
-                  {myThread.status === 'open' ? 'You have a conversation about this' : 'You have a request in progress'}
-                </Text>
-                <Button title="Open conversation" icon="chatbubbles-outline" onPress={() => router.push(`/thread/${myThread.id}`)} />
-              </Card>
-            ) : (
-              <RequestPanel listing={listing} existingThreadId={myThread?.id ?? null} />
-            )
-          ) : null
+        ) : listing.status === 'active' ? (
+          <MessagePanel listing={listing} existingThreadId={myThread?.id ?? null} />
         ) : null}
 
         <Comments listing={listing} comments={comments} onChange={setData} />
@@ -183,49 +172,30 @@ function AuthorBlock({ listing }: { listing: Listing }) {
   return (
     <View style={styles.authorNameRow}>
       <Ionicons name="shield-checkmark-outline" size={18} color={Colors.success} />
-      <Text style={styles.authorMeta}>Posted by a verified Rice student. Names are shared once a request is accepted.</Text>
+      <Text style={styles.authorMeta}>Posted by a verified Rice student. Names are only shared if someone chooses to share them in a chat.</Text>
     </View>
   );
 }
 
-function RequestPanel({ listing, existingThreadId }: { listing: Listing; existingThreadId: string | null }) {
+// Message the person who posted. Price, time, and meetup are all worked out in the chat.
+function MessagePanel({ listing, existingThreadId }: { listing: Listing; existingThreadId: string | null }) {
   const router = useRouter();
   const requireSignIn = useRequireSignIn();
-  const isService = listing.type === 'service';
-  const [option, setOption] = useState(listing.priceOptions[0]?.label ?? null);
-  const [chosenTime, setChosenTime] = useState<number | null>(null);
+  const who = listing.type === 'service' ? listing.author.name.split(' ')[0] : 'the seller';
+  const [text, setText] = useState(listing.type === 'service' ? "Hi! I'm interested. When are you free?" : 'Hi! Is this still available?');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const price = isService ? listing.priceOptions.find((o) => o.label === option)?.price ?? listing.price : listing.price;
-
-  async function threadId() {
-    return existingThreadId ?? (await api.startThread(listing.id)).thread.id;
-  }
-
-  async function sendQuick(text: string) {
+  async function send() {
+    if (!text.trim()) return;
     setError(null);
     setBusy(true);
     try {
-      const id = await threadId();
-      await api.sendMessage(id, text);
+      const id = existingThreadId ?? (await api.startThread(listing.id)).thread.id;
+      await api.sendMessage(id, text.trim());
       router.push(`/thread/${id}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not send.');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function submit() {
-    setError(null);
-    setBusy(true);
-    try {
-      const id = await threadId();
-      await api.requestThread(id, { proposedTime: chosenTime, optionLabel: option });
-      router.push(`/thread/${id}`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not send your request.');
+      setError(e instanceof Error ? e.message : 'Could not send your message.');
     } finally {
       setBusy(false);
     }
@@ -233,49 +203,22 @@ function RequestPanel({ listing, existingThreadId }: { listing: Listing; existin
 
   return (
     <Card style={styles.requestCard}>
-      <Text style={styles.cardTitle}>{isService ? 'Book a time' : 'Request to buy'}</Text>
-
-      {isService && listing.priceOptions.length > 1 && (
-        <View style={styles.section}>
-          <Label>CHOOSE A SERVICE</Label>
-          <View style={styles.wrap}>
-            {listing.priceOptions.map((o) => (
-              <Chip
-                key={o.label}
-                label={`${o.label} · ${formatPrice(o.price)}`}
-                selected={option === o.label}
-                onPress={() => setOption(o.label)}
-              />
-            ))}
-          </View>
-        </View>
+      <Text style={styles.cardTitle}>Message {who}</Text>
+      {existingThreadId && (
+        <Button variant="ghost" title="Open your conversation" icon="chatbubbles-outline" onPress={() => router.push(`/thread/${existingThreadId}`)} />
       )}
-
-      <TimePicker
-        dayLabel={isService ? 'PICK A DAY (OPTIONAL)' : 'WHEN CAN YOU MEET? (OPTIONAL)'}
-        onChange={setChosenTime}
+      <TextInput
+        value={text}
+        onChangeText={setText}
+        placeholder="Write a message…"
+        placeholderTextColor={Colors.textMuted}
+        multiline
+        maxLength={1000}
+        style={styles.messageInput}
       />
-
-      <View style={styles.section}>
-        <Label>QUICK MESSAGE</Label>
-        <View style={styles.wrap}>
-          {QUICK_MESSAGES.map((m) => (
-            <Chip key={m} label={m} icon="chatbubble-outline" onPress={() => requireSignIn(() => sendQuick(m))} />
-          ))}
-        </View>
-      </View>
-
       <ErrorText message={error} />
-      <Button
-        title={`${isService ? 'Book' : 'Send request'} · ${formatPrice(price)}`}
-        onPress={() => requireSignIn(submit)}
-        loading={busy}
-      />
-      <Text style={styles.finePrint}>
-        {chosenTime ? `${formatDateTime(chosenTime)}. ` : 'No time picked: you can arrange one in chat. '}
-        Names are shared with both of you once {isService ? listing.author.name.split(' ')[0] : 'the seller'} accepts. You
-        pay in person.
-      </Text>
+      <Button title="Send message" icon="send" onPress={() => requireSignIn(send)} loading={busy} disabled={!text.trim()} />
+      <Text style={styles.finePrint}>Work out price, time, and where to meet in your messages. You pay in person.</Text>
     </Card>
   );
 }
@@ -285,11 +228,11 @@ function OwnerPanel({ listing, onChange }: { listing: Listing; onChange: (l: Lis
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function set(status: Listing['status']) {
+  async function run(fn: () => Promise<void>) {
     setBusy(true);
     setError(null);
     try {
-      onChange((await api.setListingStatus(listing.id, status)).listing);
+      await fn();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not update.');
     } finally {
@@ -299,22 +242,30 @@ function OwnerPanel({ listing, onChange }: { listing: Listing; onChange: (l: Lis
 
   return (
     <Card>
-      <Text style={styles.cardTitle}>This is your listing</Text>
-      <Text style={styles.detailText}>
-        Requests from buyers show up in Messages. Mark it sold or paused to hide it from Browse.
-      </Text>
-      <View style={styles.wrap}>
-        {(['active', 'paused', 'sold'] as const).map((s) => (
-          <Chip
-            key={s}
-            label={s === 'active' ? 'Active' : s === 'paused' ? 'Paused' : 'Sold'}
-            selected={listing.status === s}
-            onPress={() => !busy && set(s)}
-          />
-        ))}
-      </View>
+      <Text style={styles.cardTitle}>This is your post</Text>
+      <Text style={styles.detailText}>Messages about it show up in Messages.</Text>
+      {listing.type === 'item' && (
+        <Button
+          variant="secondary"
+          icon={listing.status === 'sold' ? 'refresh' : 'checkmark-done'}
+          title={listing.status === 'sold' ? 'Mark as available again' : 'Mark as sold'}
+          loading={busy}
+          onPress={() =>
+            run(async () => onChange((await api.setListingStatus(listing.id, listing.status === 'sold' ? 'active' : 'sold')).listing))
+          }
+        />
+      )}
+      <Button
+        variant="danger"
+        icon="trash-outline"
+        title="Take down post"
+        onPress={() =>
+          run(async () => {
+            if (await takeDown(listing.id, listing.title)) router.replace('/profile');
+          })
+        }
+      />
       <ErrorText message={error} />
-      <Button variant="secondary" title="Go to Messages" icon="chatbubbles-outline" onPress={() => router.push('/messages')} />
     </Card>
   );
 }
@@ -343,6 +294,16 @@ const styles = StyleSheet.create({
   section: { gap: Spacing.sm },
   row: { gap: Spacing.sm },
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  messageInput: {
+    ...Typography.body,
+    color: Colors.text,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    minHeight: 96,
+    textAlignVertical: 'top',
+  },
   finePrint: { ...Typography.caption, color: Colors.textSecondary, textAlign: 'center' },
   locationBox: {
     flexDirection: 'row',

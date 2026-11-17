@@ -90,7 +90,7 @@ export default function EditProfileScreen() {
           />
           <View style={styles.section}>
             <Label>HOW PEOPLE CAN PAY YOU (ALL OPTIONAL)</Label>
-            <Text style={styles.hint}>Only shown to the other person after you accept a request.</Text>
+            <Text style={styles.hint}>Only shown to someone after you tap "Share my name & payment info" in a chat.</Text>
             {PAYMENT_METHODS.map((m) => (
               <Field
                 key={m.key}

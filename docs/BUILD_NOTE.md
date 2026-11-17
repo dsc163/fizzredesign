@@ -7,16 +7,13 @@
 
 ## Core user flow
 
-**Book a service from another Rice student and complete the exchange.** This is the PRD's north-star action, a completed peer-to-peer exchange.
+**Find something from another Rice student and work it out in messages.** This leads to the PRD's north-star action, a completed peer-to-peer exchange.
 
-1. A provider posts a service with just a name and a cost, for example "Calc 101 tutoring, $20". A photo and description are optional.
-2. A buyer finds it on **Browse** (no account needed to look around), optionally picks a day and time, and taps **Book**. If they aren't signed in yet, they sign up and come right back.
-3. The provider gets a notification and taps **Accept**.
-4. Both sides now see each other's verified name, and the buyer sees the provider's payment apps (Venmo, Cash App, Zelle, PayPal, or Apple Pay), with tap-to-pay links where the app has one.
-5. They pick a public meetup spot (Fondren entrance, RMC, a college commons).
-6. The buyer taps **I paid**, and the provider taps **Mark complete**. The app shows **Exchange complete**.
-
-Buying an item uses the same flow with **Send request**.
+1. Someone posts a service or item with just a name and a price. A photo and description are optional.
+2. A buyer finds it on **Browse** (no account needed to look around), types a message in the box on the post, and taps **Send message**. If they aren't signed in yet, they sign up and come right back.
+3. The two chat in **Messages** to settle the time, the place, and the price. The other person gets an in-app notification for each new message.
+4. When they're ready to meet, either person taps **Share my name & payment info**. The other person then sees their verified name and payment apps (Venmo, Cash App, Zelle, PayPal, Apple Pay), with tap-to-pay links where the app has one. Both stay anonymous until they share (service providers are public).
+5. The person who posted can **Mark as sold** or **Take down** the post at any time, from the post itself or from Profile.
 
 **Events** have their own tab. Students host an event (anonymously, as themselves, or as a club), and others RSVP, get the location when the host allows, get reminders, and follow live updates.
 
@@ -27,8 +24,8 @@ Buying an item uses the same flow with **Send request**.
 - Posting items, services, and events with photos.
 - Search and categories.
 - Messaging between people.
-- Requests and bookings: accept, decline, or suggest another time.
-- Names and payment handles (Venmo, Cash App, Zelle, PayPal, Apple Pay) revealed only after acceptance.
+- Messaging between buyers and sellers, with names and payment handles (Venmo, Cash App, Zelle, PayPal, Apple Pay) shared only when a person chooses to.
+- Taking down any post (items, services, events) in one tap.
 - Browse, Events, and post pages are open without an account; posting, booking, messaging, likes, comments, and RSVPs ask you to sign in first.
 - Meetup spot, then paid and complete.
 - Notifications: requests, replies, comments, likes, RSVPs, host updates, location reveals, and event reminders.
@@ -56,9 +53,8 @@ Buying an item uses the same flow with **Send request**.
 
 1. Open **https://darioushclapp.com/fizzredesign/** in any browser, on a phone or laptop.
 2. Tap **Create account** and enter any name, email, and password.
-3. The core flow needs two people, a provider and a buyer. To test alone, use two browsers (or a normal and a private window) with two accounts:
-   - **Provider:** Post → Service → enter a name and cost → Post. Optionally add payment apps in Profile → Edit profile.
-   - **Buyer:** Browse → open the service → Book. Picking a time is optional.
-   - **Provider:** tap the bell → New booking request → Accept.
-   - **Buyer:** pick a meetup spot → I paid. **Provider:** Mark complete.
+3. The core flow needs two people. To test alone, use two browsers (or a normal and a private window) with two accounts:
+   - **Seller:** Post → Service or Item → enter a name and price → Post.
+   - **Buyer:** Browse → open the post → type a message → Send message.
+   - **Seller:** Messages (or the bell) → reply → Share my name & payment info.
 4. **Events:** open the Events tab, pick your interests, then tap **Host an event**, or RSVP to an existing one.

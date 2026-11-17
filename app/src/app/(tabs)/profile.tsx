@@ -1,6 +1,7 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { api, Listing } from '@/api/client';
 import { useAuth } from '@/auth/AuthProvider';
@@ -11,6 +12,7 @@ import { SignInPrompt } from '@/components/SignInPrompt';
 import { Avatar, Button, Card, Label, VerifiedBadge } from '@/components/ui';
 import { Colors, Spacing, Typography } from '@/constants/theme';
 import { paymentEntries } from '@/lib/payments';
+import { takeDown } from '@/lib/takeDown';
 
 export default function ProfileScreen() {
   const { user, signOut } = useAuth();
@@ -67,7 +69,7 @@ export default function ProfileScreen() {
               </Text>
             ))
           )}
-          <Text style={styles.hint}>Only shown to the other person after you accept a request.</Text>
+          <Text style={styles.hint}>Only shown to someone after you tap "Share my name & payment info" in a chat.</Text>
         </Card>
         <Button variant="secondary" title="Edit profile" icon="create-outline" onPress={() => router.push('/profile/edit')} />
 
@@ -94,9 +96,18 @@ export default function ProfileScreen() {
           listings.map((l) => (
             <View key={l.id} style={styles.listing}>
               {l.type === 'event' ? <PartyEventCard listing={l} /> : <PostCard listing={l} />}
-              {l.status !== 'active' && (
-                <Text style={styles.statusTag}>{l.status === 'sold' ? 'Sold' : 'Paused'} · hidden from Browse</Text>
-              )}
+              <View style={styles.postActions}>
+                <Text style={styles.statusTag}>{l.status === 'active' ? '' : l.status === 'sold' ? 'Sold · hidden from Browse' : 'Paused · hidden from Browse'}</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={async () => {
+                    if (await takeDown(l.id, l.title).catch(() => false)) setListings((all) => all.filter((x) => x.id !== l.id));
+                  }}
+                  style={styles.takeDown}>
+                  <Ionicons name="trash-outline" size={15} color={Colors.danger} />
+                  <Text style={styles.takeDownText}>Take down</Text>
+                </Pressable>
+              </View>
             </View>
           ))
         )}
@@ -122,5 +133,8 @@ const styles = StyleSheet.create({
   section: { ...Typography.heading, color: Colors.text, marginTop: Spacing.sm },
   listing: { gap: 4 },
   statusTag: { ...Typography.caption, color: Colors.warning, paddingLeft: Spacing.sm },
+  postActions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  takeDown: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4, paddingHorizontal: Spacing.sm },
+  takeDownText: { ...Typography.caption, fontWeight: '700', color: Colors.danger },
   signOut: { marginTop: Spacing.xl },
 });

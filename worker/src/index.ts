@@ -174,6 +174,8 @@ type ThreadRow = {
   completed_at: number | null;
   buyer_read_at: number;
   seller_read_at: number;
+  buyer_shared: number;
+  seller_shared: number;
   created_at: number;
   updated_at: number;
 };
@@ -607,8 +609,18 @@ async function loadListing(env: Env, id: string) {
 
 async function requireListing(env: Env, id: string) {
   const row = await loadListing(env, id);
-  if (!row) throw new HttpError(404, 'This post no longer exists.');
+  if (!row || row.status === 'removed') throw new HttpError(404, 'This post was taken down.');
   return row;
+}
+
+// Take a post down: it disappears everywhere, and open conversations are told.
+async function removeListing(env: Env, user: UserRow, id: string) {
+  const row = await requireListing(env, id);
+  if (row.user_id !== user.id) throw new HttpError(403, 'Only the person who posted this can take it down.');
+  await env.DB.prepare(`UPDATE listings SET status = 'removed' WHERE id = ?`).bind(id).run();
+  const { results } = await env.DB.prepare(`SELECT id FROM threads WHERE listing_id = ?`).bind(id).all<{ id: string }>();
+  for (const t of results) await addMessage(env, t.id, null, 'This post was taken down by the person who posted it.');
+  return json({ ok: true });
 }
 
 async function getListing(env: Env, id: string, viewer: UserRow | null) {
@@ -774,7 +786,7 @@ async function updateListing(request: Request, env: Env, user: UserRow, id: stri
 }
 
 async function myListings(env: Env, user: UserRow) {
-  const { results } = await env.DB.prepare(`${LISTING_SELECT} WHERE l.user_id = ? ORDER BY l.created_at DESC`)
+  const { results } = await env.DB.prepare(`${LISTING_SELECT} WHERE l.user_id = ? AND l.status != 'removed' ORDER BY l.created_at DESC`)
     .bind(user.id)
     .all<ListingWithAuthor>();
   return json({ listings: await serializeMany(env, results, user.id) });
@@ -949,7 +961,8 @@ async function finishIfDone(env: Env, threadId: string, now: number) {
 
 async function counterpartFor(env: Env, thread: ThreadRow, viewer: UserRow, listingType: string) {
   const other = await loadUser(env, otherParty(thread, viewer.id));
-  const revealed = thread.status === 'accepted' || thread.status === 'completed';
+  const otherShared = other.id === thread.buyer_id ? thread.buyer_shared : thread.seller_shared;
+  const revealed = Boolean(otherShared) || thread.status === 'accepted' || thread.status === 'completed';
   if (revealed) {
     return { id: other.id, revealed: true, name: other.name, college: other.college, bio: other.bio, photo: other.photo, payments: paymentsOf(other) };
   }
@@ -997,6 +1010,7 @@ async function serializeThread(env: Env, thread: ThreadRow, viewer: UserRow, wit
     completedAt: thread.completed_at,
     updatedAt: thread.updated_at,
     counterpart: await counterpartFor(env, thread, viewer, listing.type),
+    iShared: Boolean(role === 'buyer' ? thread.buyer_shared : thread.seller_shared),
     unread: unread?.n ?? 0,
     lastMessage: last
       ? { body: last.body, system: last.sender_id === null, mine: last.sender_id === viewer.id, createdAt: last.created_at }
@@ -1039,6 +1053,20 @@ async function getThread(env: Env, user: UserRow, id: string) {
   return json({ thread: await serializeThread(env, thread, user, true) });
 }
 
+// One tap in the chat: show the other person your name, photo, and payment apps.
+async function shareContact(env: Env, user: UserRow, id: string) {
+  const thread = await threadForUser(env, id, user);
+  const column = thread.buyer_id === user.id ? 'buyer_shared' : 'seller_shared';
+  const already = thread.buyer_id === user.id ? thread.buyer_shared : thread.seller_shared;
+  if (!already) {
+    const now = Date.now();
+    await env.DB.prepare(`UPDATE threads SET ${column} = 1, updated_at = ? WHERE id = ?`).bind(now, id).run();
+    await addMessage(env, id, null, `${firstName(user.name)} shared their name and payment info.`, now);
+    await notify(env, otherParty(thread, user.id), 'accepted', `${firstName(user.name)} shared their contact info`, await listingTitle(env, thread.listing_id), `/thread/${id}`);
+  }
+  return getThread(env, user, id);
+}
+
 async function ensureNotBlocked(env: Env, a: string, b: string) {
   const row = await env.DB.prepare(
     `SELECT 1 FROM blocks WHERE (blocker_id = ?1 AND blocked_id = ?2) OR (blocker_id = ?2 AND blocked_id = ?1)`
@@ -1053,9 +1081,8 @@ async function startThread(request: Request, env: Env, user: UserRow) {
   const body = await readJson(request);
   const listingId = str(body.listingId, 60);
   const listing = await loadListing(env, listingId);
-  if (!listing || listing.status !== 'active') bad('This listing is no longer available.');
-  if (!['item', 'service'].includes(listing.type)) bad('You can message sellers about items and services.');
-  if (listing.user_id === user.id) bad('This is your own listing.');
+  if (!listing || listing.status !== 'active') bad('This post is no longer available.');
+  if (listing.user_id === user.id) bad('This is your own post.');
   await ensureNotBlocked(env, user.id, listing.user_id);
   const existing = await env.DB.prepare(
     `SELECT * FROM threads WHERE listing_id = ? AND buyer_id = ? AND status != 'completed' ORDER BY created_at DESC LIMIT 1`
@@ -1083,7 +1110,8 @@ async function sendMessage(request: Request, env: Env, user: UserRow, id: string
   // One notification per batch of unread messages: the key changes once the other person reads the thread.
   const otherId = otherParty(thread, user.id);
   const otherReadAt = thread.buyer_id === otherId ? thread.buyer_read_at : thread.seller_read_at;
-  const sender = thread.status === 'accepted' || thread.status === 'completed' ? firstName(user.name) : 'A Rice student';
+  const shared = thread.buyer_id === user.id ? thread.buyer_shared : thread.seller_shared;
+  const sender = shared || thread.status === 'accepted' || thread.status === 'completed' ? firstName(user.name) : 'a Rice student';
   await notify(env, otherId, 'message', `New message from ${sender}`, text, `/thread/${id}`, `msg:${id}:${otherReadAt}`);
   return getThread(env, user, id);
 }
@@ -1275,6 +1303,8 @@ const ROUTES: [string, RegExp, Handler][] = [
   ['POST', /^\/threads$/, authed((r, e, u) => startThread(r, e, u))],
   ['GET', /^\/threads\/([\w-]+)$/, authed((_r, e, u, p) => getThread(e, u, p[0]))],
   ['POST', /^\/threads\/([\w-]+)\/messages$/, authed((r, e, u, p) => sendMessage(r, e, u, p[0]))],
+  ['POST', /^\/threads\/([\w-]+)\/share$/, authed((_r, e, u, p) => shareContact(e, u, p[0]))],
+  ['DELETE', /^\/listings\/([\w-]+)$/, authed((_r, e, u, p) => removeListing(e, u, p[0]))],
   ['POST', /^\/threads\/([\w-]+)\/request$/, authed((r, e, u, p) => requestThread(r, e, u, p[0]))],
   ['POST', /^\/threads\/([\w-]+)\/respond$/, authed((r, e, u, p) => respondThread(r, e, u, p[0]))],
   ['POST', /^\/threads\/([\w-]+)\/meetup$/, authed((r, e, u, p) => setMeetup(r, e, u, p[0]))],

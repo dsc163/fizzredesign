@@ -9,6 +9,7 @@ import { Party, Radius, Spacing, Typography } from '@/constants/theme';
 import { dateTile, formatDay, formatTime } from '@/lib/format';
 import { useRequireSignIn } from '@/lib/requireSignIn';
 import { toggleRsvp } from '@/lib/rsvp';
+import { takeDown } from '@/lib/takeDown';
 
 import { Comments, SocialBar } from './social';
 import { Avatar } from './ui';
@@ -210,6 +211,15 @@ export function EventDetail({ data, onChange }: { data: ListingResponse; onChang
             </LinearGradient>
           </Pressable>
           <Text style={styles.finePrint}>Everyone who RSVP'd or saved this event gets notified.</Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={async () => {
+              if (await takeDown(listing.id, listing.title).catch(() => false)) router.replace('/events');
+            }}
+            style={styles.takeDown}>
+            <Ionicons name="trash-outline" size={16} color={Party.pink} />
+            <Text style={styles.takeDownText}>Take down event</Text>
+          </Pressable>
         </View>
       )}
 
@@ -340,5 +350,7 @@ const styles = StyleSheet.create({
   update: { borderLeftWidth: 3, borderLeftColor: Party.pink, paddingLeft: Spacing.md, gap: 2 },
   updateMeta: { fontSize: 11, fontWeight: '800', color: Party.pink, letterSpacing: 0.5 },
   updateBody: { ...Typography.body, color: Party.text },
+  takeDown: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: Spacing.sm },
+  takeDownText: { ...Typography.caption, fontWeight: '800', color: Party.pink },
   report: { ...Typography.caption, color: Party.muted, textAlign: 'center', textDecorationLine: 'underline' },
 });
