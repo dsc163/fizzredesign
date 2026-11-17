@@ -4,6 +4,7 @@ import { ComponentProps, useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 
 import { api } from '@/api/client';
+import { useAuth } from '@/auth/AuthProvider';
 import { Colors, Typography } from '@/constants/theme';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -23,8 +24,10 @@ function tabIcon(
 
 // Total unread messages, refreshed every 10 seconds for the tab badge.
 function useUnreadCount() {
+  const { user } = useAuth();
   const [count, setCount] = useState(0);
   useEffect(() => {
+    if (!user) return;
     let active = true;
     const load = () =>
       api
@@ -37,8 +40,8 @@ function useUnreadCount() {
       active = false;
       clearInterval(timer);
     };
-  }, []);
-  return count;
+  }, [user]);
+  return user ? count : 0;
 }
 
 export default function TabLayout() {

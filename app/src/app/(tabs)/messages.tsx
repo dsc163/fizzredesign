@@ -64,7 +64,7 @@ function ThreadRow({ thread }: { thread: Thread }) {
   return (
     <Link href={`/thread/${thread.id}`} asChild>
       <Pressable style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}>
-        <View>
+        <View style={styles.thumb}>
           <PostThumb type={thread.listing.type} category={thread.listing.category} photo={thread.listing.photos[0]} size={52} />
           {other.revealed && (
             <View style={styles.avatarBadge}>
@@ -111,6 +111,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
+  thumb: { width: 52, height: 52 },
   avatarBadge: { position: 'absolute', right: -6, bottom: -6, borderWidth: 2, borderColor: Colors.background, borderRadius: 14 },
   body: { flex: 1, gap: 2, minWidth: 0 },
   topLine: { flexDirection: 'row', justifyContent: 'space-between', gap: Spacing.sm },
