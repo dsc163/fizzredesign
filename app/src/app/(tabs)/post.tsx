@@ -6,6 +6,7 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text
 import { api, PostType } from '@/api/client';
 import { useAuth } from '@/auth/AuthProvider';
 import { Screen } from '@/components/Screen';
+import { TimePicker } from '@/components/TimePicker';
 import { Button, Card, Chip, ErrorText, Field, IconName, Label, PostThumb } from '@/components/ui';
 import { Colors, Radius, Spacing, TypeColors, Typography } from '@/constants/theme';
 import { pickAndUploadPhoto } from '@/lib/images';
@@ -14,10 +15,21 @@ const ITEM_CATEGORIES = ['Textbooks', 'Electronics', 'Dorm', 'Furniture', 'Cloth
 const SERVICE_CATEGORIES = ['Haircuts', 'Tutoring', 'Photography', 'DJ and Music', 'Rentals', 'Rides', 'Other'];
 const CONDITIONS = ['New', 'Like new', 'Good', 'Fair'];
 
-const TYPES: { type: 'item' | 'service'; title: string; text: string; icon: IconName }[] = [
+type FormType = 'item' | 'service' | 'event';
+
+const TYPES: { type: FormType; title: string; text: string; icon: IconName }[] = [
   { type: 'item', title: 'Item', text: 'Sell something. Anonymous until a sale is agreed.', icon: 'pricetag-outline' },
   { type: 'service', title: 'Service', text: 'Haircuts, tutoring, DJ, photography, rides, rentals. Uses your profile.', icon: 'cut-outline' },
+  { type: 'event', title: 'Event', text: 'Host a student event. Post anonymously, as yourself, or as a club.', icon: 'calendar-outline' },
 ];
+
+const EVENT_TAGS = ['Parties', 'Sports', 'Clubs', 'Performances', 'Food', 'Study', 'Pop-ups'];
+const DURATIONS = [1, 2, 3, 4];
+const VISIBILITY = [
+  { key: 'public', label: 'Public', text: 'Everyone sees the exact location.' },
+  { key: 'rsvp', label: 'RSVPs only', text: 'Only people who RSVP see the exact location.' },
+  { key: 'reveal', label: 'Reveal day of', text: 'RSVPs see the exact location 3 hours before it starts.' },
+] as const;
 
 // Keep digits and at most one decimal point with two places.
 function cleanPrice(text: string) {
@@ -26,7 +38,7 @@ function cleanPrice(text: string) {
 }
 
 export default function PostScreen() {
-  const [type, setType] = useState<'item' | 'service' | null>(null);
+  const [type, setType] = useState<FormType | null>(null);
 
   if (!type) {
     return (
@@ -49,13 +61,203 @@ export default function PostScreen() {
               <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
             </Pressable>
           ))}
-          <Text style={styles.soon}>Posting events, Wanted requests, and Lost & Found is coming soon.</Text>
+          <Text style={styles.soon}>Posting Wanted requests and Lost & Found is coming soon.</Text>
         </ScrollView>
       </Screen>
     );
   }
 
+  if (type === 'event') return <EventForm onBack={() => setType(null)} />;
   return <PostForm type={type} onBack={() => setType(null)} />;
+}
+
+function EventForm({ onBack }: { onBack: () => void }) {
+  const router = useRouter();
+  const { user } = useAuth();
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [title, setTitle] = useState('');
+  const [startsAt, setStartsAt] = useState<number | null>(null);
+  const [duration, setDuration] = useState(2);
+  const [area, setArea] = useState('');
+  const [address, setAddress] = useState('');
+  const [visibility, setVisibility] = useState<'public' | 'rsvp' | 'reveal'>('public');
+  const [hostAs, setHostAs] = useState<'anonymous' | 'me' | 'custom'>('anonymous');
+  const [hostName, setHostName] = useState('');
+  const [entry, setEntry] = useState('');
+  const [tags, setTags] = useState<string[]>([]);
+  const [description, setDescription] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const ready =
+    title.trim().length >= 3 &&
+    startsAt !== null &&
+    area.trim() !== '' &&
+    (visibility === 'public' || address.trim() !== '') &&
+    (hostAs !== 'custom' || hostName.trim() !== '');
+
+  async function addPhoto() {
+    setError(null);
+    setUploading(true);
+    try {
+      const url = await pickAndUploadPhoto();
+      if (url) setPhotos([url]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not upload that photo.');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function submit() {
+    setError(null);
+    setBusy(true);
+    try {
+      const { listing } = await api.createListing({
+        type: 'event',
+        title: title.trim(),
+        description: description.trim(),
+        photos,
+        startsAt,
+        durationHours: duration,
+        area: area.trim(),
+        address: address.trim(),
+        visibility,
+        hostAs,
+        hostName: hostName.trim(),
+        entry: entry.trim(),
+        tags,
+      });
+      onBack();
+      router.push(`/listing/${listing.id}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not post.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Screen>
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <Pressable onPress={onBack} style={styles.back}>
+            <Ionicons name="chevron-back" size={18} color={Colors.primary} />
+            <Text style={styles.backText}>Change type</Text>
+          </Pressable>
+          <Text style={styles.heading}>New event</Text>
+
+          <View style={styles.section}>
+            <Label>POST EVENT AS</Label>
+            <View style={styles.wrap}>
+              <Chip label="Anonymous" selected={hostAs === 'anonymous'} onPress={() => setHostAs('anonymous')} />
+              <Chip label={user?.name ?? 'Me'} selected={hostAs === 'me'} onPress={() => setHostAs('me')} />
+              <Chip label="Club or persona" selected={hostAs === 'custom'} onPress={() => setHostAs('custom')} />
+            </View>
+            {hostAs === 'custom' && (
+              <TextInput
+                value={hostName}
+                onChangeText={setHostName}
+                placeholder="e.g. Baker Socials"
+                placeholderTextColor={Colors.textMuted}
+                style={styles.input}
+                maxLength={40}
+              />
+            )}
+          </View>
+
+          <Field label="Event name" value={title} onChangeText={setTitle} placeholder="e.g. Club Sailing Kickoff Party" maxLength={80} />
+
+          <TimePicker dayLabel="WHAT DAY?" onChange={setStartsAt} />
+          <View style={styles.section}>
+            <Label>HOW LONG?</Label>
+            <View style={styles.wrap}>
+              {DURATIONS.map((h) => (
+                <Chip key={h} label={`${h} hour${h > 1 ? 's' : ''}`} selected={duration === h} onPress={() => setDuration(h)} />
+              ))}
+            </View>
+          </View>
+
+          <Field
+            label="General area (everyone sees this)"
+            value={area}
+            onChangeText={setArea}
+            placeholder="e.g. Off campus, near Rice Village"
+            maxLength={80}
+          />
+          <View style={styles.section}>
+            <Label>WHO SEES THE EXACT LOCATION?</Label>
+            <View style={styles.wrap}>
+              {VISIBILITY.map((v) => (
+                <Chip key={v.key} label={v.label} selected={visibility === v.key} onPress={() => setVisibility(v.key)} />
+              ))}
+            </View>
+            <Text style={styles.typeText}>{VISIBILITY.find((v) => v.key === visibility)?.text}</Text>
+          </View>
+          <Field
+            label={visibility === 'public' ? 'Exact location (optional)' : 'Exact location'}
+            value={address}
+            onChangeText={setAddress}
+            placeholder="e.g. 2415 Rice Blvd, back patio"
+            maxLength={120}
+          />
+
+          <Field label="Entry (optional)" value={entry} onChangeText={setEntry} placeholder="e.g. $5 at the door, or Venmo @club" maxLength={120} />
+
+          <View style={styles.section}>
+            <Label>TAGS</Label>
+            <View style={styles.wrap}>
+              {EVENT_TAGS.map((t) => (
+                <Chip
+                  key={t}
+                  label={t}
+                  selected={tags.includes(t)}
+                  onPress={() => setTags((all) => (all.includes(t) ? all.filter((x) => x !== t) : [...all, t]))}
+                />
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <Label>PHOTO (OPTIONAL)</Label>
+            <View style={styles.row}>
+              {photos[0] ? (
+                <Pressable onPress={() => setPhotos([])} accessibilityLabel="Remove photo">
+                  <PostThumb type="event" photo={photos[0]} size={96} />
+                  <View style={styles.remove}>
+                    <Ionicons name="close" size={14} color="#FFFFFF" />
+                  </View>
+                </Pressable>
+              ) : (
+                <Pressable onPress={addPhoto} style={styles.addPhoto} accessibilityRole="button" accessibilityLabel="Add photo">
+                  <Ionicons name="camera-outline" size={26} color={Colors.textSecondary} />
+                  <Text style={styles.addPhotoText}>{uploading ? 'Uploading…' : 'Add photo'}</Text>
+                </Pressable>
+              )}
+            </View>
+          </View>
+
+          <Field
+            label="Description"
+            value={description}
+            onChangeText={setDescription}
+            placeholder="What's happening, who it's for, what to bring…"
+            multiline
+            maxLength={1000}
+          />
+
+          <ErrorText message={error} />
+          <Button title="Post event" onPress={submit} loading={busy} disabled={!ready || uploading} />
+          {!ready && (
+            <Text style={styles.typeText}>
+              Add a name, day and time, and general area{visibility !== 'public' ? ', plus the exact location for RSVPs' : ''}.
+            </Text>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </Screen>
+  );
 }
 
 function PostForm({ type, onBack }: { type: 'item' | 'service'; onBack: () => void }) {

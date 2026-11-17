@@ -1,10 +1,11 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { api, Listing, ThreadStatus } from '@/api/client';
+import { api, EventUpdate, Listing, ThreadStatus } from '@/api/client';
 import { EmptyState } from '@/components/EmptyState';
+import { locationLine } from '@/components/EventCard';
 import { Screen } from '@/components/Screen';
 import { TimePicker } from '@/components/TimePicker';
 import { Avatar, Button, Card, Chip, ErrorText, Label, Loading, PostThumb, TypeLabel, VerifiedBadge } from '@/components/ui';
@@ -18,6 +19,7 @@ export default function ListingScreen() {
   const router = useRouter();
   const [listing, setListing] = useState<Listing | null>(null);
   const [myThread, setMyThread] = useState<{ id: string; status: ThreadStatus } | null>(null);
+  const [updates, setUpdates] = useState<EventUpdate[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -25,6 +27,7 @@ export default function ListingScreen() {
       const result = await api.listing(id);
       setListing(result.listing);
       setMyThread(result.myThread);
+      setUpdates(result.updates ?? []);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load this listing.');
@@ -81,7 +84,16 @@ export default function ListingScreen() {
           </Card>
         )}
 
-        {listing.type === 'event' && <EventInfo listing={listing} />}
+        {listing.type === 'event' && (
+          <EventPanel
+            listing={listing}
+            updates={updates}
+            onChange={(r) => {
+              setListing(r.listing);
+              setUpdates(r.updates ?? []);
+            }}
+          />
+        )}
         {listing.type === 'wanted' && listing.details.needed_by && (
           <Detail icon="time-outline" text={`Needed by ${formatDateTime(listing.details.needed_by)}`} />
         )}
@@ -98,9 +110,9 @@ export default function ListingScreen() {
           <Detail icon="location-outline" text={`Found at ${listing.details.found_at}`} />
         )}
 
-        {listing.isMine ? (
+        {listing.isMine && listing.type !== 'event' ? (
           <OwnerPanel listing={listing} onChange={setListing} />
-        ) : listing.type === 'item' || listing.type === 'service' ? (
+        ) : listing.type === 'event' ? null : listing.type === 'item' || listing.type === 'service' ? (
           listing.status === 'active' ? (
             myThread && myThread.status !== 'declined' ? (
               <Card>
@@ -114,11 +126,7 @@ export default function ListingScreen() {
             )
           ) : null
         ) : (
-          <Text style={styles.notice}>
-            {listing.type === 'event'
-              ? 'RSVPs are coming soon in this test version.'
-              : 'Responding to Wanted and Lost & Found posts is coming soon in this test version.'}
-          </Text>
+          <Text style={styles.notice}>Responding to Wanted and Lost & Found posts is coming soon in this test version.</Text>
         )}
 
         {!listing.isMine && (
@@ -187,35 +195,147 @@ function AuthorBlock({ listing }: { listing: Listing }) {
   );
 }
 
-function EventInfo({ listing }: { listing: Listing }) {
+function calendarLink(listing: Listing) {
   const d = listing.details;
+  const stamp = (ms: number) => new Date(ms).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: listing.title,
+    dates: `${stamp(d.starts_at ?? Date.now())}/${stamp(d.ends_at ?? (d.starts_at ?? Date.now()) + 7200000)}`,
+    details: `${listing.description}\n\nFrom Fizz Marketplace`,
+    location: d.address ?? d.area ?? '',
+  });
+  return `https://calendar.google.com/calendar/render?${params}`;
+}
+
+function EventPanel({
+  listing,
+  updates,
+  onChange,
+}: {
+  listing: Listing;
+  updates: EventUpdate[];
+  onChange: (r: { listing: Listing; updates: EventUpdate[] }) => void;
+}) {
+  const d = listing.details;
+  const [busy, setBusy] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const going = Boolean(d.my_going);
+  const saved = Boolean(d.my_saved);
+
+  async function run(fn: () => Promise<{ listing: Listing; updates: EventUpdate[] }>) {
+    setBusy(true);
+    setError(null);
+    try {
+      onChange(await fn());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
-    <Card>
-      {d.starts_at && (
-        <Text style={styles.cardTitle}>
-          {formatDay(d.starts_at)} · {formatTime(d.starts_at)}
-          {d.ends_at ? ` to ${formatTime(d.ends_at)}` : ''}
-        </Text>
-      )}
-      <View style={styles.locationBox}>
-        <Ionicons name="location-outline" size={16} color={Colors.warning} />
-        <Text style={styles.locationText}>
-          {d.area}
-          {d.location_note ? `. ${d.location_note}.` : ''}
-        </Text>
-      </View>
-      {d.entry && <Text style={styles.detailText}>Entry: {d.entry}</Text>}
-      <View style={styles.tags}>
-        {(d.tags ?? []).map((t) => (
-          <View key={t} style={styles.tag}>
-            <Text style={styles.tagText}>{t}</Text>
+    <>
+      <Card>
+        {d.starts_at && (
+          <Text style={styles.cardTitle}>
+            {formatDay(d.starts_at)} · {formatTime(d.starts_at)}
+            {d.ends_at ? ` to ${formatTime(d.ends_at)}` : ''}
+          </Text>
+        )}
+        <View style={[styles.locationBox, d.address ? styles.locationOpen : null]}>
+          <Ionicons
+            name={d.address ? 'location' : 'lock-closed-outline'}
+            size={16}
+            color={d.address ? Colors.success : Colors.warning}
+          />
+          <View style={styles.flex}>
+            <Text style={[styles.locationText, d.address ? styles.locationTextOpen : null]}>{locationLine(listing)}</Text>
+            {d.address && d.area && d.address !== d.area ? (
+              <Text style={styles.locationSub}>{d.area}</Text>
+            ) : null}
+            {!d.address && !going ? <Text style={styles.locationSub}>RSVP to get the exact location.</Text> : null}
           </View>
-        ))}
-        <View style={styles.tag}>
-          <Text style={styles.tagText}>{d.rsvps ?? 0} going</Text>
         </View>
-      </View>
-    </Card>
+        {d.entry && (
+          <Text style={styles.detailText}>
+            <Text style={styles.bold}>Entry:</Text> {d.entry}
+          </Text>
+        )}
+        <View style={styles.tags}>
+          {(d.tags ?? []).map((t) => (
+            <View key={t} style={styles.tag}>
+              <Text style={styles.tagText}>{t}</Text>
+            </View>
+          ))}
+          <View style={styles.tag}>
+            <Text style={styles.tagText}>{d.rsvps ?? 0} going</Text>
+          </View>
+        </View>
+      </Card>
+
+      {listing.isMine ? (
+        <Card>
+          <Text style={styles.cardTitle}>You're hosting this event</Text>
+          <Text style={styles.detailText}>{d.rsvps ?? 0} people are going. Post an update to let everyone know what's happening.</Text>
+        </Card>
+      ) : (
+        <View style={styles.eventActions}>
+          <Button
+            style={styles.flex2}
+            title={going ? 'Going ✓' : 'RSVP'}
+            variant={going ? 'secondary' : 'primary'}
+            loading={busy}
+            onPress={() => run(() => api.rsvp(listing.id, { going: !going }))}
+          />
+          <Button
+            style={styles.flex}
+            variant="secondary"
+            title={saved ? 'Saved' : 'Save'}
+            icon={saved ? 'bookmark' : 'bookmark-outline'}
+            onPress={() => run(() => api.rsvp(listing.id, { saved: !saved }))}
+          />
+          <Button style={styles.flex} variant="secondary" title="Cal" icon="calendar-outline" onPress={() => Linking.openURL(calendarLink(listing))} />
+        </View>
+      )}
+      {going && !listing.isMine && (
+        <Text style={styles.finePrint}>You're going. Tap Cal to add it to your calendar so you don't forget.</Text>
+      )}
+      <ErrorText message={error} />
+
+      <Card>
+        <Label>LIVE UPDATES</Label>
+        {updates.length === 0 ? (
+          <Text style={styles.detailText}>No updates from the host yet.</Text>
+        ) : (
+          updates.map((u) => (
+            <View key={u.id} style={styles.update}>
+              <Text style={styles.updateMeta}>Host · {formatDay(u.createdAt)} {formatTime(u.createdAt)}</Text>
+              <Text style={styles.updateBody}>{u.body}</Text>
+            </View>
+          ))
+        )}
+        {listing.isMine && (
+          <View style={styles.updateInput}>
+            <TextInput
+              value={draft}
+              onChangeText={setDraft}
+              placeholder="e.g. Doors open! Bring your Rice ID."
+              placeholderTextColor={Colors.textMuted}
+              style={styles.input}
+            />
+            <Button
+              title="Post"
+              disabled={!draft.trim()}
+              loading={busy}
+              onPress={() => run(() => api.postUpdate(listing.id, draft.trim())).then(() => setDraft(''))}
+            />
+          </View>
+        )}
+      </Card>
+    </>
   );
 }
 
@@ -380,7 +500,27 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     backgroundColor: Colors.warningSoft,
   },
-  locationText: { ...Typography.caption, color: Colors.warning, flex: 1 },
+  locationText: { ...Typography.caption, color: Colors.warning, fontWeight: '600' },
+  locationOpen: { backgroundColor: Colors.successSoft },
+  locationTextOpen: { color: Colors.success },
+  locationSub: { ...Typography.caption, color: Colors.textSecondary },
+  flex: { flex: 1 },
+  flex2: { flex: 2 },
+  bold: { fontWeight: '700', color: Colors.text },
+  eventActions: { flexDirection: 'row', gap: Spacing.sm },
+  update: { borderLeftWidth: 3, borderLeftColor: Colors.primary, paddingLeft: Spacing.md, gap: 2 },
+  updateMeta: { ...Typography.caption, fontWeight: '600', color: Colors.text },
+  updateBody: { ...Typography.body, color: Colors.text },
+  updateInput: { gap: Spacing.sm },
+  input: {
+    ...Typography.body,
+    color: Colors.text,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+  },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
   tag: { paddingHorizontal: Spacing.sm, paddingVertical: 4, borderRadius: Radius.sm, backgroundColor: Colors.surface },
   tagText: { ...Typography.caption, color: Colors.text },

@@ -4,6 +4,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { api, Listing } from '@/api/client';
 import { useAuth } from '@/auth/AuthProvider';
+import { EventCard } from '@/components/EventCard';
 import { PostCard } from '@/components/PostCard';
 import { Screen } from '@/components/Screen';
 import { Avatar, Button, Card, Label, VerifiedBadge } from '@/components/ui';
@@ -13,10 +14,12 @@ export default function ProfileScreen() {
   const { user, signOut } = useAuth();
   const router = useRouter();
   const [listings, setListings] = useState<Listing[]>([]);
+  const [events, setEvents] = useState<Listing[]>([]);
 
   useFocusEffect(
     useCallback(() => {
       api.myListings().then((r) => setListings(r.listings)).catch(() => undefined);
+      api.myEvents().then((r) => setEvents(r.listings)).catch(() => undefined);
     }, [])
   );
 
@@ -56,13 +59,20 @@ export default function ProfileScreen() {
         )}
         <Button variant="secondary" title="Edit profile" icon="create-outline" onPress={() => router.push('/profile/edit')} />
 
-        <Text style={styles.section}>My listings</Text>
+        <Text style={styles.section}>My events</Text>
+        {events.length === 0 ? (
+          <Text style={styles.body}>Events you RSVP to or save show up here.</Text>
+        ) : (
+          events.map((e) => <EventCard key={e.id} listing={e} onChange={(u) => setEvents((all) => all.map((x) => (x.id === u.id ? u : x)))} />)
+        )}
+
+        <Text style={styles.section}>My posts</Text>
         {listings.length === 0 ? (
           <Text style={styles.body}>You haven't posted anything yet.</Text>
         ) : (
           listings.map((l) => (
             <View key={l.id} style={styles.listing}>
-              <PostCard listing={l} />
+              {l.type === 'event' ? <EventCard listing={l} /> : <PostCard listing={l} />}
               {l.status !== 'active' && (
                 <Text style={styles.statusTag}>{l.status === 'sold' ? 'Sold' : 'Paused'} · hidden from Browse</Text>
               )}

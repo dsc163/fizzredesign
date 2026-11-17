@@ -49,11 +49,19 @@ export type EventDetails = {
   host_name?: string;
   host_verified?: number;
   area?: string;
+  address?: string | null;
+  location_hidden?: boolean;
   location_note?: string;
+  visibility?: 'public' | 'rsvp' | 'reveal';
+  reveal_at?: number | null;
   entry?: string;
   tags?: string[];
   rsvps?: number;
+  my_going?: boolean;
+  my_saved?: boolean;
 };
+
+export type EventUpdate = { id: string; body: string; createdAt: number };
 
 export type Listing = {
   id: string;
@@ -104,6 +112,12 @@ export type Thread = {
   unread: number;
   lastMessage: { body: string; system: boolean; mine: boolean; createdAt: number } | null;
   messages?: Message[];
+};
+
+export type ListingResponse = {
+  listing: Listing;
+  myThread: { id: string; status: ThreadStatus } | null;
+  updates: EventUpdate[];
 };
 
 // ---------- transport ----------
@@ -183,8 +197,11 @@ export const api = {
     if (params.q) query.set('q', params.q);
     return request<{ listings: Listing[] }>('GET', `/listings?${query}`);
   },
-  listing: (id: string) =>
-    request<{ listing: Listing; myThread: { id: string; status: ThreadStatus } | null }>('GET', `/listings/${id}`),
+  listing: (id: string) => request<ListingResponse>('GET', `/listings/${id}`),
+  rsvp: (id: string, input: { going?: boolean; saved?: boolean }) =>
+    request<ListingResponse>('POST', `/listings/${id}/rsvp`, input),
+  postUpdate: (id: string, body: string) => request<ListingResponse>('POST', `/listings/${id}/updates`, { body }),
+  myEvents: () => request<{ listings: Listing[] }>('GET', '/me/events'),
   createListing: (input: Record<string, unknown>) => request<{ listing: Listing }>('POST', '/listings', input),
   setListingStatus: (id: string, status: Listing['status']) =>
     request<{ listing: Listing }>('PATCH', `/listings/${id}`, { status }),

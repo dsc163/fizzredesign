@@ -17,6 +17,8 @@ const MAX_IMAGE_BYTES = 1_500_000;
 const SERVICE_CATEGORIES = ['Haircuts', 'Tutoring', 'Photography', 'DJ and Music', 'Rentals', 'Rides', 'Other'];
 const ITEM_CATEGORIES = ['Textbooks', 'Electronics', 'Dorm', 'Furniture', 'Clothing', 'Bikes', 'Tickets', 'Other'];
 const CONDITIONS = ['New', 'Like new', 'Good', 'Fair'];
+const EVENT_TAGS = ['Parties', 'Sports', 'Clubs', 'Performances', 'Food', 'Study', 'Pop-ups'];
+const VISIBILITIES = ['public', 'rsvp', 'reveal'];
 
 // ---------- helpers ----------
 
@@ -177,7 +179,12 @@ function rollDemoDetails(row: ListingWithAuthor, details: Record<string, unknown
     const week = 7 * 86400000;
     if (details.ends_at < now) {
       const shift = Math.ceil((now - details.ends_at) / week) * week;
-      return { ...details, starts_at: details.starts_at + shift, ends_at: details.ends_at + shift };
+      return {
+        ...details,
+        starts_at: details.starts_at + shift,
+        ends_at: details.ends_at + shift,
+        ...(typeof details.reveal_at === 'number' && { reveal_at: details.reveal_at + shift }),
+      };
     }
   }
   if (row.type === 'wanted' && typeof details.needed_by === 'number' && details.needed_by < now) {
@@ -188,8 +195,34 @@ function rollDemoDetails(row: ListingWithAuthor, details: Record<string, unknown
   return details;
 }
 
-function serializeListing(row: ListingWithAuthor, viewerId: string | null) {
-  const details = rollDemoDetails(row, parse<Record<string, unknown>>(row.details, {}));
+type EventContext = { going: number; mine: { going: boolean; saved: boolean } | null };
+
+// Hide an event's exact address unless the host's visibility rule allows this viewer to see it.
+function eventDetails(row: ListingWithAuthor, details: Record<string, unknown>, viewerId: string | null, ctx?: EventContext) {
+  const visibility = (details.visibility as string) || 'public';
+  const going = Boolean(ctx?.mine?.going);
+  const revealAt = typeof details.reveal_at === 'number' ? details.reveal_at : null;
+  const isHost = viewerId === row.user_id;
+  const visible =
+    isHost || visibility === 'public' || (going && (visibility === 'rsvp' || (revealAt !== null && Date.now() >= revealAt)));
+  let locationNote: string;
+  if (visibility === 'public') locationNote = 'Public location';
+  else if (visibility === 'rsvp') locationNote = visible ? 'Shared with you because you RSVP’d' : 'Exact location shared with RSVPs';
+  else locationNote = visible ? 'Revealed to RSVPs' : `Exact location revealed to RSVPs${revealAt ? ' at reveal time' : ''}`;
+  return {
+    ...details,
+    address: visible ? details.address ?? null : null,
+    location_hidden: !visible && Boolean(details.address),
+    location_note: locationNote,
+    rsvps: (typeof details.rsvps === 'number' ? details.rsvps : 0) + (ctx?.going ?? 0),
+    my_going: going,
+    my_saved: Boolean(ctx?.mine?.saved),
+  };
+}
+
+function serializeListing(row: ListingWithAuthor, viewerId: string | null, ctx?: EventContext) {
+  let details = rollDemoDetails(row, parse<Record<string, unknown>>(row.details, {}));
+  if (row.type === 'event') details = eventDetails(row, details, viewerId, ctx);
   let author;
   if (row.type === 'service') {
     author = {
@@ -368,6 +401,37 @@ async function blockedIds(env: Env, userId: string | null): Promise<string[]> {
   return results.map((r) => r.id);
 }
 
+async function eventContexts(env: Env, ids: string[], viewerId: string | null) {
+  const map = new Map<string, EventContext>();
+  if (ids.length === 0) return map;
+  const marks = ids.map(() => '?').join(',');
+  const { results: counts } = await env.DB.prepare(
+    `SELECT listing_id, count(*) AS n FROM rsvps WHERE going = 1 AND listing_id IN (${marks}) GROUP BY listing_id`
+  )
+    .bind(...ids)
+    .all<{ listing_id: string; n: number }>();
+  const mine = viewerId
+    ? (
+        await env.DB.prepare(`SELECT listing_id, going, saved FROM rsvps WHERE user_id = ? AND listing_id IN (${marks})`)
+          .bind(viewerId, ...ids)
+          .all<{ listing_id: string; going: number; saved: number }>()
+      ).results
+    : [];
+  for (const id of ids) {
+    const m = mine.find((r) => r.listing_id === id);
+    map.set(id, {
+      going: counts.find((c) => c.listing_id === id)?.n ?? 0,
+      mine: m ? { going: Boolean(m.going), saved: Boolean(m.saved) } : null,
+    });
+  }
+  return map;
+}
+
+async function serializeMany(env: Env, rows: ListingWithAuthor[], viewerId: string | null) {
+  const ctx = await eventContexts(env, rows.filter((r) => r.type === 'event').map((r) => r.id), viewerId);
+  return rows.map((r) => serializeListing(r, viewerId, ctx.get(r.id)));
+}
+
 const SECTION_TYPES: Record<string, string[]> = {
   events: ['event'],
   goods: ['item'],
@@ -405,7 +469,14 @@ async function listListings(url: URL, env: Env, viewer: UserRow | null) {
   )
     .bind(...binds)
     .all<ListingWithAuthor>();
-  return json({ listings: results.map((r) => serializeListing(r, viewer?.id ?? null)) });
+  const now = Date.now();
+  let listings = (await serializeMany(env, results, viewer?.id ?? null)).filter(
+    (l) => l.type !== 'event' || (typeof l.details.ends_at === 'number' && l.details.ends_at > now)
+  );
+  if (section === 'events') {
+    listings = listings.sort((a, b) => (a.details.starts_at as number) - (b.details.starts_at as number));
+  }
+  return json({ listings });
 }
 
 async function loadListing(env: Env, id: string) {
@@ -415,7 +486,14 @@ async function loadListing(env: Env, id: string) {
 async function getListing(env: Env, id: string, viewer: UserRow | null) {
   const row = await loadListing(env, id);
   if (!row) throw new HttpError(404, 'This listing no longer exists.');
-  const listing = serializeListing(row, viewer?.id ?? null);
+  const [listing] = await serializeMany(env, [row], viewer?.id ?? null);
+  let updates: { id: string; body: string; createdAt: number }[] = [];
+  if (row.type === 'event') {
+    const { results } = await env.DB.prepare(`SELECT * FROM event_updates WHERE listing_id = ? ORDER BY created_at DESC`)
+      .bind(id)
+      .all<{ id: string; body: string; created_at: number }>();
+    updates = results.map((u) => ({ id: u.id, body: u.body, createdAt: u.created_at }));
+  }
   let myThread = null;
   if (viewer && viewer.id !== row.user_id) {
     myThread = await env.DB.prepare(
@@ -425,7 +503,52 @@ async function getListing(env: Env, id: string, viewer: UserRow | null) {
       .bind(id, viewer.id)
       .first();
   }
-  return json({ listing, myThread });
+  return json({ listing, myThread, updates });
+}
+
+async function rsvp(request: Request, env: Env, user: UserRow, id: string) {
+  const row = await loadListing(env, id);
+  if (!row || row.type !== 'event') throw new HttpError(404, 'Event not found.');
+  const body = await readJson(request);
+  const current = await env.DB.prepare(`SELECT going, saved FROM rsvps WHERE listing_id = ? AND user_id = ?`)
+    .bind(id, user.id)
+    .first<{ going: number; saved: number }>();
+  const going = typeof body.going === 'boolean' ? body.going : Boolean(current?.going);
+  const saved = typeof body.saved === 'boolean' ? body.saved : Boolean(current?.saved);
+  await env.DB.prepare(
+    `INSERT INTO rsvps (listing_id, user_id, going, saved, created_at) VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT (listing_id, user_id) DO UPDATE SET going = excluded.going, saved = excluded.saved`
+  )
+    .bind(id, user.id, going ? 1 : 0, saved ? 1 : 0, Date.now())
+    .run();
+  return getListing(env, id, user);
+}
+
+async function postUpdate(request: Request, env: Env, user: UserRow, id: string) {
+  const row = await loadListing(env, id);
+  if (!row || row.type !== 'event') throw new HttpError(404, 'Event not found.');
+  if (row.user_id !== user.id) throw new HttpError(403, 'Only the host can post updates.');
+  const body = await readJson(request);
+  const text = str(body.body, 500);
+  if (!text) bad('Write an update first.');
+  await env.DB.prepare(`INSERT INTO event_updates (id, listing_id, body, created_at) VALUES (?, ?, ?, ?)`)
+    .bind(crypto.randomUUID(), id, text, Date.now())
+    .run();
+  return getListing(env, id, user);
+}
+
+async function myEvents(env: Env, user: UserRow) {
+  const { results } = await env.DB.prepare(
+    `${LISTING_SELECT} JOIN rsvps r ON r.listing_id = l.id AND r.user_id = ?
+     WHERE l.type = 'event' AND (r.going = 1 OR r.saved = 1) AND l.status = 'active'`
+  )
+    .bind(user.id)
+    .all<ListingWithAuthor>();
+  const now = Date.now();
+  const listings = (await serializeMany(env, results, user.id))
+    .filter((l) => (l.details.ends_at as number) > now)
+    .sort((a, b) => (a.details.starts_at as number) - (b.details.starts_at as number));
+  return json({ listings });
 }
 
 async function createListing(request: Request, env: Env, user: UserRow) {
@@ -460,8 +583,44 @@ async function createListing(request: Request, env: Env, user: UserRow) {
       .slice(0, 5);
     if (priceOptions.length === 0) bad('Add at least one service with a price.');
     price = Math.min(...priceOptions.map((o) => o.price));
+  } else if (type === 'event') {
+    const startsAt = num(body.startsAt);
+    const hours = num(body.durationHours) ?? 2;
+    if (startsAt === null || startsAt < Date.now() - 3600000) bad('Pick a start time that has not passed.');
+    if (hours <= 0 || hours > 24) bad('Pick how long the event runs.');
+    const area = str(body.area, 80);
+    if (!area) bad('Add a general area, like "Near Rice Village" or "Baker commons".');
+    const visibility = VISIBILITIES.includes(str(body.visibility, 10)) ? str(body.visibility, 10) : 'public';
+    const address = str(body.address, 120) || null;
+    if (visibility !== 'public' && !address) bad('Add the exact location to share with RSVPs.');
+    const hostMode = str(body.hostAs, 20);
+    const hostName = hostMode === 'me' ? user.name : hostMode === 'custom' ? str(body.hostName, 40) : 'Anonymous';
+    if (!hostName) bad('Add the name to post as.');
+    const tags = Array.isArray(body.tags) ? body.tags.filter((t): t is string => EVENT_TAGS.includes(t as string)) : [];
+    const details = {
+      starts_at: startsAt,
+      ends_at: startsAt + hours * 3600000,
+      host_name: hostName,
+      host_verified: 0,
+      area,
+      address: address ?? area,
+      visibility,
+      reveal_at: visibility === 'reveal' ? startsAt - 3 * 3600000 : null,
+      entry: str(body.entry, 120) || 'Free',
+      tags,
+      rsvps: 0,
+    };
+    const id = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO listings (id, user_id, type, title, description, category, photos, details, created_at)
+       VALUES (?, ?, 'event', ?, ?, ?, ?, ?, ?)`
+    )
+      .bind(id, user.id, title, description, tags[0] ?? 'Other', JSON.stringify(photos), JSON.stringify(details), Date.now())
+      .run();
+    const [listing] = await serializeMany(env, [(await loadListing(env, id))!], user.id);
+    return json({ listing });
   } else {
-    bad('You can post an item or a service.');
+    bad('You can post an item, a service, or an event.');
   }
 
   const id = crypto.randomUUID();
@@ -507,7 +666,7 @@ async function myListings(env: Env, user: UserRow) {
   const { results } = await env.DB.prepare(`${LISTING_SELECT} WHERE l.user_id = ? ORDER BY l.created_at DESC`)
     .bind(user.id)
     .all<ListingWithAuthor>();
-  return json({ listings: results.map((r) => serializeListing(r, user.id)) });
+  return json({ listings: await serializeMany(env, results, user.id) });
 }
 
 // ---------- threads (conversations + exchanges) ----------
@@ -866,12 +1025,15 @@ const ROUTES: [string, RegExp, Handler][] = [
   ['GET', /^\/me$/, async (r, e) => json({ user: publicUser(await requireUser(r, e)) })],
   ['PATCH', /^\/me$/, async (r, e) => updateMe(r, e, await requireUser(r, e))],
   ['GET', /^\/me\/listings$/, async (r, e) => myListings(e, await requireUser(r, e))],
+  ['GET', /^\/me\/events$/, async (r, e) => myEvents(e, await requireUser(r, e))],
   ['POST', /^\/images$/, async (r, e) => uploadImage(r, e, await requireUser(r, e))],
   ['GET', /^\/images\/([\w-]+)$/, (_r, e, _u, id) => getImage(e, id)],
   ['GET', /^\/listings$/, async (r, e, u) => listListings(u, e, await currentUser(r, e))],
   ['POST', /^\/listings$/, async (r, e) => createListing(r, e, await requireUser(r, e))],
   ['GET', /^\/listings\/([\w-]+)$/, async (r, e, _u, id) => getListing(e, id, await currentUser(r, e))],
   ['PATCH', /^\/listings\/([\w-]+)$/, async (r, e, _u, id) => updateListing(r, e, await requireUser(r, e), id)],
+  ['POST', /^\/listings\/([\w-]+)\/rsvp$/, async (r, e, _u, id) => rsvp(r, e, await requireUser(r, e), id)],
+  ['POST', /^\/listings\/([\w-]+)\/updates$/, async (r, e, _u, id) => postUpdate(r, e, await requireUser(r, e), id)],
   ['GET', /^\/threads$/, async (r, e) => listThreads(e, await requireUser(r, e))],
   ['POST', /^\/threads$/, async (r, e) => startThread(r, e, await requireUser(r, e))],
   ['GET', /^\/threads\/([\w-]+)$/, async (r, e, _u, id) => getThread(e, await requireUser(r, e), id)],
