@@ -225,18 +225,18 @@ function MessagePanel({ listing, existingThreadId }: { listing: Listing; existin
 
 function OwnerPanel({ listing, onChange }: { listing: Listing; onChange: (l: Listing) => void }) {
   const router = useRouter();
-  const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState<'sold' | 'down' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function run(fn: () => Promise<void>) {
-    setBusy(true);
+  async function run(which: 'sold' | 'down', fn: () => Promise<void>) {
+    setPending(which);
     setError(null);
     try {
       await fn();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not update.');
     } finally {
-      setBusy(false);
+      setPending(null);
     }
   }
 
@@ -249,9 +249,9 @@ function OwnerPanel({ listing, onChange }: { listing: Listing; onChange: (l: Lis
           variant="secondary"
           icon={listing.status === 'sold' ? 'refresh' : 'checkmark-done'}
           title={listing.status === 'sold' ? 'Mark as available again' : 'Mark as sold'}
-          loading={busy}
+          loading={pending === 'sold'}
           onPress={() =>
-            run(async () => onChange((await api.setListingStatus(listing.id, listing.status === 'sold' ? 'active' : 'sold')).listing))
+            run('sold', async () => onChange((await api.setListingStatus(listing.id, listing.status === 'sold' ? 'active' : 'sold')).listing))
           }
         />
       )}
@@ -259,8 +259,9 @@ function OwnerPanel({ listing, onChange }: { listing: Listing; onChange: (l: Lis
         variant="danger"
         icon="trash-outline"
         title="Take down post"
+        disabled={pending === 'down'}
         onPress={() =>
-          run(async () => {
+          run('down', async () => {
             if (await takeDown(listing.id, listing.title)) router.replace('/profile');
           })
         }

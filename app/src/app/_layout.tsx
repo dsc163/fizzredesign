@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 
 import { AuthProvider, useAuth } from '@/auth/AuthProvider';
+import { ConfirmProvider } from '@/components/ConfirmProvider';
 import { Loading } from '@/components/ui';
 import { BadgeProvider } from '@/lib/badges';
 import { Colors, MaxAppWidth, Typography } from '@/constants/theme';
@@ -53,7 +54,9 @@ export default function RootLayout() {
         <StatusBar style="dark" />
         <AuthProvider>
           <BadgeProvider>
-            <AuthGate />
+            <ConfirmProvider>
+              <AuthGate />
+            </ConfirmProvider>
           </BadgeProvider>
         </AuthProvider>
       </View>
